@@ -1,3 +1,1 @@
-.mqtt-config.json
-.slack-config.json
-.rpi-info.json
+*.json

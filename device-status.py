@@ -1,16 +1,15 @@
 import paho.mqtt.client as mqtt
 import time
-import datetime
 import requests
 import json
-from datetime import datetime
 from prettytable import PrettyTable
-import pandas as pd
-import os
+from datetime import datetime, timedelta, timezone
+import pytz
 
 # Initialize the heartbeat table
 device_table = PrettyTable()
-device_table.field_names = ["RPI-ID", "MAC", "ONLINE", "START_TIME", "HEARTBEAT_TIME",  "LAST_TEST_ETH", "LAST_TEST_WLAN"]
+device_table.field_names = ["RPI-ID", "MAC", "ONLINE", "START_TIME", "HEARTBEAT_TIME", "LAST_TEST_ETH",
+                            "LAST_TEST_WLAN"]
 
 #  List of Mac addresses of devices
 mac_pi = [
@@ -32,13 +31,12 @@ mac_pi = [
 # Initialize a heartbeat-file list
 file_path = "/var/www/html/viz/device_list.json"
 
-
+# Get the last device data from the server as a json object
 def get_last_data(fpath):
     try:
         # Attempt to open and load the JSON data
         with open(fpath, 'r') as file:
             last_data = json.load(file)
-        #print(last_data)
     except FileNotFoundError:
         # Handle missing file error
         print(f"Error: The file '{fpath}' does not exist.")
@@ -56,65 +54,6 @@ def update_table(message):
     global device_table
     report_values = list(message.values())
     device_table.add_row(report_values)
-
-device_list = get_last_data(file_path)
-list2 = device_list
-
-# Flatten the dictionary inside the mac_pi list for easier access
-lookup = {v: k for d in mac_pi for k, v in d.items()}
-
-# Add the RPI identifier to each entry in list2
-filtered_list = []
-
-for item in list2:
-    mac_address = item['mac']
-    rpi_identifier = lookup.get(mac_address)
-    if rpi_identifier:
-        # Create a new dictionary starting with the RPI_ID
-        new_item = {'RPI_ID': rpi_identifier}
-        # Merge in the rest of the data from the original item
-        new_item.update(item)
-        # Append the new item to the filtered list
-        filtered_list.append(new_item)
-
-
-# Convert timestap to human-readable format
-def convert_timestamp(ms):
-    """Convert milliseconds since the epoch to a formatted date-time string."""
-    if ms == 'NaN':
-        return 'NaN'
-    # Convert milliseconds to seconds
-    seconds = ms / 1000.0
-    return datetime.utcfromtimestamp(seconds).strftime('%Y-%m-%d %H:%M:%S')
-
-
-# Update each entry with formatted timestamps
-for entry in filtered_list:
-    for key in ['start_timestamp', 'last_timestamp', 'last_test_eth', 'last_test_wlan']:
-        if key in entry:
-            entry[key] = convert_timestamp(entry[key])
-
-
-# Convert LoD into a table
-for j in range(len(filtered_list)):
-    update_table(filtered_list[j])
-
-
-# Define which columns to keep (i.e., drop 'Age' column)
-columns_to_keep = ["RPI-ID", "MAC", "ONLINE", "HEARTBEAT_TIME",  "LAST_TEST_ETH", "LAST_TEST_WLAN"]
-
-
-# Create a new table with selected columns
-dev_table = PrettyTable()
-dev_table.field_names = columns_to_keep
-
-
-# Copy data from original table, excluding the 'Age' column
-for row in device_table._rows:
-    new_row = [row[device_table.field_names.index(col)] for col in columns_to_keep]
-    dev_table.add_row(new_row)
-
-print(dev_table)
 
 
 def load_slack_config():
@@ -141,4 +80,95 @@ def send_slack_msg(input_table):
     requests.post(slack_conf['url'], json=payload)
 
 
-send_slack_msg(dev_table)
+# Convert Timestamp to human-readable format: '%Y-%m-%d %H:%M:%S'
+def convert_timestamp(ms):
+    """Convert milliseconds since the epoch to a formatted date-time string."""
+    if ms == 'NaN':
+        return 'NaN'
+    # Convert milliseconds to seconds
+    seconds = ms / 1000.0
+
+    timestamp_datetime = datetime.fromtimestamp(seconds, timezone.utc)
+    formatted_datetime = timestamp_datetime.strftime('%Y-%m-%d %H:%M:%S')
+    # print(formatted_datetime)
+    return formatted_datetime
+
+
+# Compute the ages of the last three time fields
+def compute_age(data):
+    current_time = datetime.now(pytz.utc)
+    time_keys = ['last_timestamp', 'last_test_eth', 'last_test_wlan']
+
+    for item in data:
+        for key in time_keys:
+            timestamp_str = item.get(key)
+            if timestamp_str and timestamp_str != 'NaN':
+                timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                timestamp_dt = pytz.utc.localize(timestamp_dt)
+                age_delta = current_time - timestamp_dt
+                age_minutes = int(age_delta.total_seconds() / 60.0)
+                item[key] = f"{age_minutes} min(s) ago"
+                # # Update the time to a readable format
+                # if age_minutes < 2:
+                #     item[key] = f"{age_minutes} min ago"
+                # elif age_minutes < 60:
+                #     item[key] = f"{age_minutes} mins ago"
+                # else:
+                #     h = age_minutes // 60
+                #     m = age_minutes % 60
+                #     item[key] = f"{h} hr {m} min ago"
+                # # age_string = f"{age_delta.days} d, {age_delta.seconds // 3600} h ago"
+                # # item[key] = age_string
+            elif timestamp_str == 'NaN':
+                item[key] = 'N/A'
+    return data
+
+
+# Main function
+def main():
+    # Create a list of dictionaries (LoD) from the json file
+    device_list = get_last_data(file_path)
+
+    # Flatten the dictionary inside the mac_pi list for easier access
+    lookup = {v: k for d in mac_pi for k, v in d.items()}
+
+    # Add the appropriate RPI identifier to each entry in device_list
+    augmented_list = []
+    for item in device_list:
+        mac_address = item['mac']
+        rpi_identifier = lookup.get(mac_address)
+        if rpi_identifier:
+            # Create a new dictionary starting with the RPI_ID
+            new_item = {'RPI_ID': rpi_identifier}
+            # Merge in the rest of the data from the original item
+            new_item.update(item)
+            # Append the new item to the filtered list
+            augmented_list.append(new_item)
+
+    # Update each entry with formatted (converted) timestamps
+    for entry in augmented_list:
+        for key in ['start_timestamp', 'last_timestamp', 'last_test_eth', 'last_test_wlan']:
+            if key in entry:
+                entry[key] = convert_timestamp(entry[key])
+
+    # Convert the timestamp entries into ages
+    updated_data = compute_age(augmented_list)
+
+    # Define and print the new table with age strings
+    table = PrettyTable()
+    table.field_names = ['RPI_ID', 'ONLINE', 'LAST_HB', 'LAST_TEST_ETH', 'LAST_TEST_WLAN']
+    table.title = "DATA FROM FIREBASE"
+    for item in updated_data:
+        if item['online']:
+            item['online'] = 'YES'
+        else:
+            item['online'] = 'NO'
+        table.add_row(
+            [item['RPI_ID'], item['online'], item['last_timestamp'], item['last_test_eth'], item['last_test_wlan']])
+
+    print(table)
+    send_slack_msg(table)
+
+
+if __name__ == "__main__":
+    main()

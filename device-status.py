@@ -1,35 +1,33 @@
-import paho.mqtt.client as mqtt
-import time
 import requests
 import json
 from prettytable import PrettyTable
 from datetime import datetime, timedelta, timezone
-import pytz
-
-# Initialize the heartbeat table
-device_table = PrettyTable()
-device_table.field_names = ["RPI-ID", "MAC", "ONLINE", "START_TIME", "HEARTBEAT_TIME", "LAST_TEST_ETH",
-                            "LAST_TEST_WLAN"]
+from zoneinfo import ZoneInfo
+import math
 
 #  List of Mac addresses of devices
 mac_pi = [
     {
-        "RPI-10": "8E-51-F9-59-3F-8D",
-        "RPI-20": "D8-3A-DD-41-AA-94",
-        "RPI-30": "D8-3A-DD-4C-C4-9E",
-        "RPI-40": "D8-3A-DD-4C-C5-19",
-        "RPI-50": "D8-3A-DD-4C-C5-B5",
-        "RPI-60": "D8-3A-DD-4C-C5-CE",
-        "RPI-70": "D8-3A-DD-5C-A3-9A",
-        "RPI-80": "D8-3A-DD-5C-E3-DB",
-        "RPI-90": "D8-3A-DD-63-C6-76",
-        "RPI-100": "D8-3A-DD-63-C8-5A",
-        "RPI-110": "DC-A6-32-1D-A4-E0",
-        "RPI-02": "D8-3A-DD-5C-E1-94"
+        "RPI-01": "D8-3A-DD-63-C6-76",
+        "RPI-02": "D8-3A-DD-5C-E1-94",
+        "RPI-10": "D8-3A-DD-5C-E3-DB",
+        "RPI-19": "D8-3A-DD-5C-A3-9A",
+        "RPI-20": "D8-3A-DD-63-C8-5A",
+        "RPI-51": "D8-3A-DD-41-AA-94",
+        "RPI-52": "D8-3A-DD-4C-C4-9E",
+        "RPI-53": "D8-3A-DD-4C-C5-19",
+        "RPI-54": "D8-3A-DD-4C-C5-B5",
+        "RPI-55": "D8-3A-DD-4C-C5-CE",
+        "RPI-56": "D8-3A-DD-5C-A3-9A",
+        "RPI-57": "D8-3A-DD-5C-E3-DB",
+        "RPI-58": "D8-3A-DD-63-C6-76",
+        "RPI-59": "D8-3A-DD-63-C8-5A",
+        "RPI-60": "DC-A6-32-1D-A4-E0",
     }]
 
-# Initialize a heartbeat-file list
+# Path to device-list file
 file_path = "/var/www/html/viz/device_list.json"
+
 
 # Get the last device data from the server as a json object
 def get_last_data(fpath):
@@ -47,13 +45,6 @@ def get_last_data(fpath):
         # Handle other possible exceptions (e.g., permission errors)
         print(f"An unexpected error occurred: {e}")
     return last_data
-
-
-# This function takes a dictionary as input and add rows to the existing table
-def update_table(message):
-    global device_table
-    report_values = list(message.values())
-    device_table.add_row(report_values)
 
 
 def load_slack_config():
@@ -80,45 +71,51 @@ def send_slack_msg(input_table):
     requests.post(slack_conf['url'], json=payload)
 
 
-# Convert Timestamp to human-readable format: '%Y-%m-%d %H:%M:%S'
-def convert_timestamp(ms):
-    """Convert milliseconds since the epoch to a formatted date-time string."""
-    if ms == 'NaN':
+def ms_to_iso(timestamp_ms):
+    if isinstance(timestamp_ms, float) and math.isnan(timestamp_ms):
         return 'NaN'
-    # Convert milliseconds to seconds
-    seconds = ms / 1000.0
+    else:
+        # Convert milliseconds to seconds
+        timestamp_seconds = timestamp_ms / 1000.0
 
-    timestamp_datetime = datetime.fromtimestamp(seconds, timezone.utc)
-    formatted_datetime = timestamp_datetime.strftime('%Y-%m-%d %H:%M:%S')
-    # print(formatted_datetime)
-    return formatted_datetime
+        # Convert timestamp to a datetime object
+        dt = datetime.fromtimestamp(timestamp_seconds, timezone.utc)
+
+        # Convert datetime to ISO format
+        iso_format = dt.isoformat()
+
+    return iso_format
 
 
-# Compute the ages of the last three time fields
-def compute_age(data):
-    current_time = datetime.now(pytz.utc)
+# Calculate the time difference given ISO format times with timezones as a string
+def calculate_iso_difference(time_str1, time_str2):
+    # Convert strings to datetime objects, ensuring they are timezone aware
+    time1 = datetime.fromisoformat(time_str1)
+    time2 = datetime.fromisoformat(time_str2)
+
+    # Convert both times to the same timezone (UTC) for comparison
+    time1_utc = time1.astimezone(ZoneInfo('UTC'))
+    time2_utc = time2.astimezone(ZoneInfo('UTC'))
+
+    # Calculate the difference
+    time_diff = time1_utc - time2_utc
+    time_diff = time_diff.total_seconds()
+    # Return total seconds
+    return time_diff
+
+
+def calculate_age(data):
+    current_time = datetime.now(timezone.utc).astimezone().isoformat()
     time_keys = ['last_timestamp', 'last_test_eth', 'last_test_wlan']
 
     for item in data:
         for key in time_keys:
             timestamp_str = item.get(key)
             if timestamp_str and timestamp_str != 'NaN':
-                timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                timestamp_dt = pytz.utc.localize(timestamp_dt)
-                age_delta = current_time - timestamp_dt
-                age_minutes = int(age_delta.total_seconds() / 60.0)
+                timestamp_dt = ms_to_iso(timestamp_str)
+                age_delta = calculate_iso_difference(current_time, timestamp_dt)
+                age_minutes = int(age_delta / 60.0)
                 item[key] = f"{age_minutes} min(s) ago"
-                # # Update the time to a readable format
-                # if age_minutes < 2:
-                #     item[key] = f"{age_minutes} min ago"
-                # elif age_minutes < 60:
-                #     item[key] = f"{age_minutes} mins ago"
-                # else:
-                #     h = age_minutes // 60
-                #     m = age_minutes % 60
-                #     item[key] = f"{h} hr {m} min ago"
-                # # age_string = f"{age_delta.days} d, {age_delta.seconds // 3600} h ago"
-                # # item[key] = age_string
             elif timestamp_str == 'NaN':
                 item[key] = 'N/A'
     return data
@@ -144,15 +141,8 @@ def main():
             new_item.update(item)
             # Append the new item to the filtered list
             augmented_list.append(new_item)
-
-    # Update each entry with formatted (converted) timestamps
-    for entry in augmented_list:
-        for key in ['start_timestamp', 'last_timestamp', 'last_test_eth', 'last_test_wlan']:
-            if key in entry:
-                entry[key] = convert_timestamp(entry[key])
-
-    # Convert the timestamp entries into ages
-    updated_data = compute_age(augmented_list)
+    # print(augmented_list)
+    updated_data = calculate_age(augmented_list)
 
     # Define and print the new table with age strings
     table = PrettyTable()

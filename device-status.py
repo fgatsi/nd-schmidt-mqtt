@@ -8,6 +8,7 @@ import math
 #  List of Mac addresses of devices
 mac_pi = [
     {
+        "RPI-00": "8E-51-F9-59-3F-8D",
         "RPI-01": "D8-3A-DD-63-C6-76",
         "RPI-02": "D8-3A-DD-5C-E1-94",
         "RPI-10": "D8-3A-DD-5C-E3-DB",

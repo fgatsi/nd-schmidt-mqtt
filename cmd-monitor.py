@@ -257,14 +257,52 @@ def on_message(client, userdata, msg):
                     slack_block = create_markdown_block(text)
                     send_slack_blocks(rpi_id, slack_block)
 
-        case "gitreset":
-            pass
-        case "restartsrv":
-            pass
+        case msg_type if msg_type.startswith("gitreset"):
+            if msg_payload["result"] != "success":
+                text = ("```gitreset error: "
+                        f"{json.dumps(msg_payload['err'])}```")
+            else:
+                branch_name = ""
+                if msg_type.startswith("gitreset/"):
+                    splits = msg_type.split("/")
+                    branch_name = f"{splits[1]} "
+                text = (f"```gitreset success: {branch_name}"
+                        f"{msg_payload['out']['stdout']}```")
+            slack_block = create_markdown_block(text)
+            send_slack_blocks(rpi_id, slack_block)
+
+        case msg_type if msg_type.startswith("restartsrv"):
+            if msg_payload["result"] != "success":
+                text = ("```Restart service error: "
+                        f"{json.dumps(msg_payload['err'])}```")
+            else:
+                # returncode -> bool
+                out_dict = {
+                    "Restart service": {
+                        key: "success" if value == 0 else "error"
+                        for key, value in msg_payload[
+                            'out']['returncode'].items()}
+                }
+                text = f"```{dict_to_string(out_dict)}```"
+            slack_block = create_markdown_block(text)
+            send_slack_blocks(rpi_id, slack_block)
+
         case "update":
-            pass
+            if msg_payload["result"] != "success":
+                text = f"```Update error: {json.dumps(msg_payload['err'])}```"
+            else:
+                text = f"```Update success!```"
+            slack_block = create_markdown_block(text)
+            send_slack_blocks(rpi_id, slack_block)
+
         case "reboot":
-            pass
+            if msg_payload["result"] != "success":
+                text = f"```Reboot error: {json.dumps(msg_payload['err'])}```"
+            else:
+                text = f"```Reboot success!```"
+            slack_block = create_markdown_block(text)
+            send_slack_blocks(rpi_id, slack_block)
+
         case _:
             logging.warning("Unknown mqtt command %s", msg_payload["type"])
             text = f"```Err: Unknown mqtt command {msg_payload['type']}```"

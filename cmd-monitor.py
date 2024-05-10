@@ -54,27 +54,27 @@ def create_markdown_block(text):
 
 
 help_text = create_markdown_block(
-    "`ping RPI-ID texts`: ping the selected Pi, which will be replied "
+    "`/pi ping RPI-ID texts`: ping the selected Pi, which will be replied "
     "with the same input texts.\n"
     "\n"
-    "`status RPI-ID [ssid|iface|up|ip|mac]`: get the status of selected "
+    "`/pi status RPI-ID [ssid|iface|up|ip|mac]`: get the status of selected "
     "Pi, can be refined by selecting a parameter.\n"
     "\n"
-    "`logs RPI-ID (mqtt|speedtest) [n]`: Get the log stored in the "
+    "`/pi logs RPI-ID (mqtt|speedtest) [n]`: Get the log stored in the "
     "selected Pi, must specify either `mqtt` or `speedtest` log. "
     "Additionally, specify last `n` lines of the logs (default=20).\n"
     "\n"
-    "`gitreset RPI-ID (main|testing|experimental)`: Reset the "
+    "`/pi gitreset RPI-ID (main|testing|experimental)`: Reset the "
     "`sigcap-buddy` repository in the selected Pi to the latest of the "
     "selected branch.\n"
     "\n"
-    "`restartsrv RPI-ID [mqtt|speedtest]`: Restart all services in the "
+    "`/pi restartsrv RPI-ID [mqtt|speedtest]`: Restart all services in the "
     "selected Pi, can specify which service to restart.\n"
     "\n"
-    "`update RPI-ID`: Run `pi-install.sh` script to update the selected "
+    "`/pi update RPI-ID`: Run `pi-install.sh` script to update the selected "
     "Pi.\n"
     "\n"
-    "`reboot RPI-ID`: Reboot the selected Pi.")
+    "`/pi reboot RPI-ID`: Reboot the selected Pi.")
 help_text.insert(0, {
     "type": "header",
     "text": {

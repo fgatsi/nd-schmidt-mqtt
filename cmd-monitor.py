@@ -210,15 +210,18 @@ def on_message(client, userdata, msg):
     match msg_payload["type"]:
         case "ping":
             if msg_payload["result"] != "success":
-                text = f"```Err: {json.dumps(msg_payload['err'])}```"
+                text = f"```Ping error: {json.dumps(msg_payload['err'])}```"
             else:
-                text = f"Pong: {msg_payload['out']['pong']}"
+                if ("pong" in msg_payload["out"]):
+                    text = f"```Pong: {msg_payload['out']['pong']}```"
+                else:
+                    text = f"```Pong: <empty>```"
             slack_block = create_markdown_block(text)
             send_slack_blocks(rpi_id, slack_block)
 
         case msg_type if msg_type.startswith("status"):
             if msg_payload["result"] != "success":
-                text = f"```Err: {json.dumps(msg_payload['err'])}```"
+                text = f"```Status error: {json.dumps(msg_payload['err'])}```"
             else:
                 if msg_type.startswith("status/"):
                     splits = msg_type.split("/")
@@ -231,7 +234,7 @@ def on_message(client, userdata, msg):
 
         case msg_type if msg_type.startswith("logs"):
             if msg_payload["result"] != "success":
-                text = f"```Err: {json.dumps(msg_payload['err'])}```"
+                text = f"```Logs error: {json.dumps(msg_payload['err'])}```"
                 slack_block = create_markdown_block(text)
                 send_slack_blocks(rpi_id, slack_block)
             else:

@@ -158,6 +158,9 @@ def respond_cmd(ack, respond, command):
         respond(f"Error: {rpi_id} is invalid!")
         return
 
+    # Immediately reply to give acknowledgment
+    respond(f"Sending {cmd} command to {rpi_id}...")
+
     if cmd == "ping":
         topic = f"Schmidt/{rpi_ids[rpi_id]}/config/{cmd}"
         logging.info("Publishing to topic %s, message %s", topic, extras)

@@ -8,23 +8,35 @@ import math
 #  List of Mac addresses of devices
 mac_pi = [
     {
-        "RPI-00": "8E-51-F9-59-3F-8D",
-        "RPI-01": "D8-3A-DD-63-C6-76",
-        "RPI-02": "D8-3A-DD-5C-E1-94",
-        "RPI-10": "D8-3A-DD-5C-E3-DB",
-        "RPI-19": "D8-3A-DD-5C-A3-9A",
-        "RPI-20": "D8-3A-DD-63-C8-5A",
-        "RPI-51": "D8-3A-DD-41-AA-94",
-        "RPI-52": "D8-3A-DD-4C-C4-9E",
-        "RPI-53": "D8-3A-DD-4C-C5-19",
-        "RPI-54": "D8-3A-DD-4C-C5-B5",
-        "RPI-55": "D8-3A-DD-4C-C5-CE",
-        "RPI-56": "D8-3A-DD-5C-A3-9A",
-        "RPI-57": "D8-3A-DD-5C-E3-DB",
-        "RPI-58": "D8-3A-DD-63-C6-76",
-        "RPI-59": "D8-3A-DD-63-C8-5A",
-        "RPI-60": "DC-A6-32-1D-A4-E0",
+        "RPI-01": "DC-A6-32-1D-A4-E0",
+        "RPI-02": "8E-51-F9-59-3F-8D",
+        "RPI-03": "D8-3A-DD-41-AA-94",
+        "RPI-04": "D8-3A-DD-4C-C4-9E",
+        "RPI-05": "D8-3A-DD-4C-C5-19",
+        "RPI-06": "D8-3A-DD-4C-C5-B5",
+        "RPI-07": "D8-3A-DD-4C-C5-CE",
+        "RPI-11": "D8-3A-DD-63-C6-76",
+        "RPI-12": "D8-3A-DD-5C-E1-94",
+        "RPI-13": "D8-3A-DD-5C-E3-DB",
+        "RPI-14": "D8-3A-DD-5C-A3-9A",
+        "RPI-15": "D8-3A-DD-63-C8-5A",
+        #"RPI-16": "D8-3A-DD-63-C6-5F",
+        #"RPI-17": "D8-3A-DD-5C-E4-0B",
+        #"RPI-18": "D8-3A-DD-5C-E2-87",
+        #"RPI-19": "D8-3A-DD-5C-A5-54",
+        #"RPI-20": "D8-3A-DD-5C-E3-EE",
+        #"RPI-21": "D8-3A-DD-5C-E2-AE",
+        #"RPI-22": "D8-3A-DD-63-C7-C3",
+        #"RPI-23": "D8-3A-DD-63-C6-CB",
+        #"RPI-24": "D8-3A-DD-63-C7-93",
+        #"RPI-25": "D8-3A-DD-5C-E1-F1",
+        #"RPI-26": "D8-3A-DD-5C-E5-98",
+        #"RPI-27": "D8-3A-DD-63-C7-20",
+        #"RPI-28": "D8-3A-DD-5C-E4-D5",
+        #"RPI-29": "D8-3A-DD-5C-E2-0C",
+        #"RPI-30": "D8-3A-DD-63-C7-BA"
     }]
+
 
 # Path to device-list file
 file_path = "/var/www/html/viz/device_list.json"
@@ -156,7 +168,8 @@ def main():
             item['online'] = 'NO'
         table.add_row(
             [item['RPI_ID'], item['online'], item['last_timestamp'], item['last_test_eth'], item['last_test_wlan']])
-
+    
+    table.sortby = "RPI_ID"
     print(table)
     send_slack_msg(table)
 

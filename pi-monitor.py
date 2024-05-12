@@ -48,6 +48,34 @@ def update_table(message):
     test_table.add_row(report_values)
     return test_table
 
+attn_list = []
+
+def test_for_attention(table, column_name):
+    global attn_list
+    # Get the index of the column using the column name
+    column_index = table.field_names.index(column_name)
+    for row in table._rows:
+        attn_list.append(row[column_index])
+    if "MAYBE" not in attn_list and "YES" not in attn_list:
+        attn = False  # No pi needs attention
+    else:
+        attn = True   # At least one pi needs attention
+    return attn
+
+def attn_table(table, column_name):
+    attn_table = PrettyTable()
+    # Get the index of the column using the column name
+    column_index = table.field_names.index(column_name)
+    attn_table.field_names = table.field_names
+    attn_table.title = "ATTENTION TABLE"
+    table.header_style = "title"
+    # Loop through old table rows and filter by 'attn' column
+    for row in table._rows:
+        if row[column_index] in ["MAYBE", "YES"]:
+            attn_table.add_row(row)
+    print(attn_table)
+    return attn_table
+
 def load_mqtt_config():
     with open('.mqtt-config.json', 'r') as file:
         conf = json.load(file)
@@ -76,6 +104,23 @@ def send_slack_msg(input_table):
                 "text": {
                     "type": "mrkdwn",
                     "text": f"```{table}```"
+                }
+            }
+        ]
+    }
+    slack_conf = load_slack_config()
+    requests.post(slack_conf['url'], json=payload)
+
+# This function takes table as input and converts it into string
+def send_slack_msgtxt(input_table):
+    table = input_table.get_string()
+    payload = {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"```{table}\n\nALL GOOD! No node needs attention right now```"
                 }
             }
         ]
@@ -169,7 +214,6 @@ def on_message(client, userdata, msg):
     except json.decoder.JSONDecodeError as e:
         print("Error decoding JSON:", e)
 
-
 def main():
     # Define client and Callbacks
     client = mqtt.Client()
@@ -184,17 +228,28 @@ def main():
     client.loop_start()
 
     try:
-        time.sleep(5)
-        print(report_table)
-        report_table.sortby = "RPI_ID"
-        #print("Table sorted")
-        #send_slack_msg(report_table)
+        time.sleep(10)
+        test = test_for_attention(report_table, "ATTN")
+        if test:
+            print(report_table)
+            # Sort the table on RPI_ID to enhance presentation
+            report_table.sortby = "RPI_ID"
+            send_slack_msg(report_table)
+            # Generate the attention table (list of devices needing  attention)
+            attn_tab = attn_table(report_table, "ATTN")      
+            send_slack_msg(attn_tab)
+        else:
+            print(report_table)
+            print("SEE SLACK CHANNEL")
+            send_slack_msgtxt(report_table)
+
         client.disconnect()
         client.loop_stop()
 
     except KeyboardInterrupt:
         print("\nDisconnecting from the broker ...")
         client.disconnect()
+        client.loop_stop()
 
 
 # Main script combining all the components

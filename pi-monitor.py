@@ -134,11 +134,19 @@ def on_message(client, userdata, msg):
                 }
 
         # Testing
-        eth_status = "UP" if eth0_data['up'] else "DOWN"
-        wifi_status = "UP" if wlan0_data['up'] else "DOWN"
+        eth_status = "UP" if eth0_data['up'] and eth0_data['ip_address'] else "DOWN"
+        wifi_status = "UP" if wlan0_data['up'] and wlan0_data['ip_address'] else "DOWN"
 
-        if age > 120 or wifi_status == "DOWN":
+        #if age > 120 or wifi_status == "DOWN":
+        #    attention_needed = "YES"
+        #else:
+        #    attention_needed = "NO"
+        if age > 120:
             attention_needed = "YES"
+            eth_status = 'UNKNOWN'
+            wifi_status = 'UNKNOWN'
+        elif age < 120 and wifi_status == "DOWN":                         
+            attention_needed = 'MAYBE'
         else:
             attention_needed = "NO"
 
@@ -162,9 +170,6 @@ def on_message(client, userdata, msg):
         print("Error decoding JSON:", e)
 
 
-
-
-
 def main():
     # Define client and Callbacks
     client = mqtt.Client()
@@ -174,7 +179,7 @@ def main():
     # Configure the client username and password
     config = load_mqtt_config()
     client.username_pw_set(config['username'], config['password'])
-    client.connect(config['broker_address'], int(config['broker_port']), 60)
+    client.connect(config['broker_addr'], int(config['broker_port']), 60)
 
     client.loop_start()
 
@@ -183,7 +188,7 @@ def main():
         print(report_table)
         report_table.sortby = "RPI_ID"
         #print("Table sorted")
-        send_slack_msg(report_table)
+        #send_slack_msg(report_table)
         client.disconnect()
         client.loop_stop()
 

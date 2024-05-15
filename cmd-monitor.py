@@ -11,7 +11,7 @@ with open('.slack-config.json', 'r') as file:
     slack_conf = json.load(file)
 with open('.mqtt-config.json', 'r') as file:
     mqtt_conf = json.load(file)
-with open('.pi-ids.json', 'r') as file:
+with open('.rpi-config.json', 'r') as file:
     rpi_ids = json.load(file)
 
 app = App(
@@ -201,8 +201,9 @@ def on_message(client, userdata, msg):
             return
 
     # Check if payload is outdated
-    span = datetime.now(timezone.utc) - datetime.fromisoformat(
-        msg_payload["timestamp"])
+    span = abs(datetime.now(timezone.utc) - datetime.fromisoformat(
+        msg_payload["timestamp"]))
+    logging.debug("span: %d s", span.seconds)
     # Check if payload is posted more than 10 minutes ago
     if span.seconds > 600:
         logging.info("Discarding old payload with timestamp %s",

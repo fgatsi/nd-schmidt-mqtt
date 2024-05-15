@@ -320,7 +320,7 @@ if __name__ == '__main__':
     client.on_message = on_message
 
     client.username_pw_set(mqtt_conf['username'], mqtt_conf['password'])
-    client.connect(mqtt_conf['broker_address'],
+    client.connect(mqtt_conf['broker_addr'],
                    int(mqtt_conf['broker_port']),
                    60)
     client.loop_start()

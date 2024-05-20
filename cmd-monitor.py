@@ -1,11 +1,27 @@
+import argparse
 import json
 from paho.mqtt import client as mqtt
-from pathlib import Path
 from slack_bolt import App
 import logging
 from datetime import datetime, timezone
+import importlib
+pi_monitor = importlib.import_module("pi-monitor")
 
-logging.basicConfig(level=logging.DEBUG)
+parser = argparse.ArgumentParser()
+parser.add_argument("--experimental", action="store_true",
+                    help="Enable experimental mode")
+parser.add_argument("-l", "--log-level", default="debug",
+                    help="Provide logging level, default is warning'")
+args = parser.parse_args()
+logging.basicConfig(level=args.log_level.upper())
+
+command_string = "/pi"
+client_id = "cmd-monitor"
+if args.experimental:
+    print("Running in experimental mode! Message reply will not be sent to "
+          "the Slack channel.")
+    command_string += "exp"
+    client_id += "-exp"
 
 with open('.slack-config.json', 'r') as file:
     slack_conf = json.load(file)
@@ -54,27 +70,29 @@ def create_markdown_block(text):
 
 
 help_text = create_markdown_block(
-    "`/pi ping RPI-ID texts`: ping the selected Pi, which will be replied "
-    "with the same input texts.\n"
-    "\n"
-    "`/pi status RPI-ID [ssid|iface|up|ip|mac]`: get the status of selected "
-    "Pi, can be refined by selecting a parameter.\n"
-    "\n"
-    "`/pi logs RPI-ID (mqtt|speedtest) [n]`: Get the log stored in the "
-    "selected Pi, must specify either `mqtt` or `speedtest` log. "
-    "Additionally, specify last `n` lines of the logs (default=20).\n"
-    "\n"
-    "`/pi gitreset RPI-ID (main|testing|experimental)`: Reset the "
-    "`sigcap-buddy` repository in the selected Pi to the latest of the "
-    "selected branch.\n"
-    "\n"
-    "`/pi restartsrv RPI-ID [mqtt|speedtest]`: Restart all services in the "
-    "selected Pi, can specify which service to restart.\n"
-    "\n"
-    "`/pi update RPI-ID`: Run `pi-install.sh` script to update the selected "
-    "Pi.\n"
-    "\n"
-    "`/pi reboot RPI-ID`: Reboot the selected Pi.")
+    f"`{command_string} list`: list all Pis.\n"
+    f"\n"
+    f"`{command_string} ping RPI-ID texts`: ping the selected Pi, which will "
+    f"be replied with the same input texts.\n"
+    f"\n"
+    f"`{command_string} status RPI-ID [ssid|iface|up|ip|mac]`: get the status "
+    f"of selected Pi, can be refined by selecting a parameter.\n"
+    f"\n"
+    f"`{command_string} logs RPI-ID (mqtt|speedtest) [n]`: Get the log stored "
+    f"in the selected Pi, must specify either `mqtt` or `speedtest` log. "
+    f"Additionally, you specify last `n` lines of the logs (default=20).\n"
+    f"\n"
+    f"`{command_string} gitreset RPI-ID (main|testing|experimental)`: Reset "
+    f"the `sigcap-buddy` repository in the selected Pi to the latest of the "
+    f"selected branch.\n"
+    f"\n"
+    f"`{command_string} restartsrv RPI-ID [mqtt|speedtest]`: Restart all "
+    f"services in the selected Pi, can specify which service to restart.\n"
+    f"\n"
+    f"`{command_string} update RPI-ID`: Run `pi-install.sh` script to update "
+    f"the selected Pi.\n"
+    f"\n"
+    f"`{command_string} reboot RPI-ID`: Reboot the selected Pi.")
 help_text.insert(0, {
     "type": "header",
     "text": {
@@ -85,6 +103,11 @@ help_text.insert(0, {
 
 
 def send_slack_attachment(rpi_id, content, filename, title):
+    logging.info("Sending as %s, attachment filename: %s", rpi_id, filename)
+    if args.experimental:
+        # Quit without actually sending the message.
+        return
+
     try:
         # Call the files.upload method using the WebClient
         # Uploading files requires the `files:write` scope
@@ -102,6 +125,11 @@ def send_slack_attachment(rpi_id, content, filename, title):
 
 
 def send_slack_blocks(rpi_id, blocks):
+    logging.info("Sending as %s, message: %s", rpi_id, blocks)
+    if args.experimental:
+        # Quit without actually sending the message.
+        return
+
     try:
         # Call the chat.postMessage method using the WebClient
         result = app.client.chat_postMessage(
@@ -139,7 +167,7 @@ def dict_to_string(dict_obj, indent=0):
     return out_str
 
 
-@app.command("/pi")
+@app.command(command_string)
 def respond_cmd(ack, respond, command):
     logging.debug("Command: %s", command)
     ack()
@@ -148,6 +176,9 @@ def respond_cmd(ack, respond, command):
     cmd = splits[0]
     if cmd == "help":
         respond(blocks=help_text)
+        return
+    elif cmd == "list":
+        pi_monitor.main(args.experimental)
         return
 
     rpi_id = splits[1]
@@ -314,7 +345,7 @@ def on_message(client, userdata, msg):
 if __name__ == '__main__':
 
     client = mqtt.Client(
-        client_id="cmd-monitor",
+        client_id=client_id,
         callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
     client.on_connect = on_connect
     client.on_message = on_message

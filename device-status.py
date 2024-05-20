@@ -37,9 +37,15 @@ mac_pi = [
         #"RPI-30": "D8-3A-DD-63-C7-BA"
     }]
 
-
 # Path to device-list file
-file_path = "/var/www/html/viz/device_list.json"
+file_path = "/Users/fgatsi/device_list.json"
+
+
+def load_config():
+    with open('.rpi-config.json', 'r') as file:
+        devlist = json.load(file)
+    print(devlist)
+    return devlist
 
 
 # Get the last device data from the server as a json object
@@ -138,9 +144,12 @@ def calculate_age(data):
 def main():
     # Create a list of dictionaries (LoD) from the json file
     device_list = get_last_data(file_path)
-
+    pi_dict = [load_config()]
+    # Convert dictionary to a JSON object
+    # pi_dev = [json.dumps(pi_dict, indent=4)]
+    # print(pi_dev)
     # Flatten the dictionary inside the mac_pi list for easier access
-    lookup = {v: k for d in mac_pi for k, v in d.items()}
+    lookup = {v: k for d in pi_dict for k, v in d.items()}
 
     # Add the appropriate RPI identifier to each entry in device_list
     augmented_list = []
@@ -168,7 +177,7 @@ def main():
             item['online'] = 'NO'
         table.add_row(
             [item['RPI_ID'], item['online'], item['last_timestamp'], item['last_test_eth'], item['last_test_wlan']])
-    
+
     table.sortby = "RPI_ID"
     print(table)
     send_slack_msg(table)

@@ -72,7 +72,6 @@ def attn_table(table, column_name):
     for row in table._rows:
         if row[column_index] in ["MAYBE", "YES"]:
             attn_table.add_row(row)
-    print(attn_table)
     return attn_table
 
 
@@ -234,14 +233,16 @@ def main(experimental=False):
         time.sleep(10)
         test = test_for_attention(report_table, "ATTN")
         if test:
-            print(report_table)
             # Sort the table on RPI_ID to enhance presentation
             report_table.sortby = "RPI_ID"
+            print(report_table)
             if not experimental:
                 send_slack_msg(report_table)
 
             # Generate the attention table (list of devices needing  attention)
             attn_tab = attn_table(report_table, "ATTN")
+            attn_tab.sortby = "RPI_ID"
+            print(attn_tab)
             if not experimental:
                 send_slack_msg(attn_tab)
         else:

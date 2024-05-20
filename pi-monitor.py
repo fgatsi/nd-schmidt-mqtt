@@ -5,6 +5,7 @@ import requests
 import json
 from datetime import datetime, timezone
 from prettytable import PrettyTable
+import argparse
 
 # Topic expression using a single wildcard
 topic = "Schmidt/+/report/status"
@@ -260,4 +261,8 @@ def main(experimental=False):
 
 # Main script combining all the components
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experimental", action="store_true",
+                        help="Enable experimental mode")
+    args = parser.parse_args()
+    main(args.experimental)

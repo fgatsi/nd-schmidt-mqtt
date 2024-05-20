@@ -1,8 +1,6 @@
-import math
 from zoneinfo import ZoneInfo
 import paho.mqtt.client as mqtt
 import time
-import datetime
 import requests
 import json
 from datetime import datetime, timezone
@@ -16,10 +14,12 @@ report = {}
 
 # Initialize a pretty_table object
 test_table = PrettyTable()
-test_table.field_names = ["RPI_ID", "MAC", "ETH_STATUS", "WIFI_STATUS", "LAST_REPORT", "ATTN"]
+test_table.field_names = ["RPI_ID", "MAC", "ETH_STATUS", "WIFI_STATUS",
+                          "LAST_REPORT", "ATTN"]
 
 
-# Calculate the time difference given ISO format times with timezones as a string
+# Calculate the time difference given ISO format times with timezones as a
+# string
 def calculate_iso_difference(time_str1, time_str2):
     # Convert strings to datetime objects, ensuring they are timezone aware
     time1 = datetime.fromisoformat(time_str1)
@@ -43,7 +43,9 @@ def update_table(message):
     test_table.add_row(report_values)
     return test_table
 
+
 attn_list = []
+
 
 def test_for_attention(table, column_name):
     global attn_list
@@ -56,6 +58,7 @@ def test_for_attention(table, column_name):
     else:
         attn = True   # At least one pi needs attention
     return attn
+
 
 def attn_table(table, column_name):
     attn_table = PrettyTable()
@@ -70,6 +73,7 @@ def attn_table(table, column_name):
             attn_table.add_row(row)
     print(attn_table)
     return attn_table
+
 
 def load_mqtt_config():
     with open('.mqtt-config.json', 'r') as file:
@@ -106,6 +110,7 @@ def send_slack_msg(input_table):
     slack_conf = load_slack_config()
     requests.post(slack_conf['url'], json=payload)
 
+
 # This function takes table as input and converts it into string
 def send_slack_msgtxt(input_table):
     table = input_table.get_string()
@@ -115,7 +120,8 @@ def send_slack_msgtxt(input_table):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"```{table}\n\nALL GOOD! No node needs attention right now```"
+                    "text": (f"```{table}\n\nALL GOOD! No node needs "
+                             f"attention right now```")
                 }
             }
         ]
@@ -135,23 +141,26 @@ def retrieve_id(mac):
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("------------Connected successfully, please wait for the results -------------")
+        print("------------Connected successfully, please wait for the "
+              "results -------------")
     client.subscribe(topic, qos=1)
+
 
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
     global report, report_table, eth0_data, wlan0_data
-   
+
     try:
         pi_mac = msg.topic.split("/")[1]
-        if len(pi_mac) == 17 and retrieve_id(pi_mac): 
+        if len(pi_mac) == 17 and retrieve_id(pi_mac):
             id = retrieve_id(pi_mac)
 
             # get the published msg, extract the timestamp and calculate age
             retained_msg = json.loads(msg.payload.decode())
             current_time = datetime.now(timezone.utc).astimezone().isoformat()
             last_msg_time = retained_msg["timestamp"]
-            age = round(calculate_iso_difference(current_time, last_msg_time) / 60)  # in minutes
+            age = round(calculate_iso_difference(
+                current_time, last_msg_time) / 60)  # in minutes
 
             # Get the Ethernet and Wi-Fi status
             out_data = retained_msg['out']
@@ -172,14 +181,17 @@ def on_message(client, userdata, msg):
                     }
 
             # Testing
-            eth_status = "UP" if eth0_data['up'] and eth0_data['ip_address'] else "DOWN"
-            wifi_status = "UP" if wlan0_data['up'] and wlan0_data['ip_address'] else "DOWN"
+            eth_status = ("UP" if eth0_data['up'] and eth0_data['ip_address']
+                          else "DOWN")
+            wifi_status = (
+                "UP" if wlan0_data['up'] and wlan0_data['ip_address']
+                else "DOWN")
 
             if age > 120:
                 attention_needed = "YES"
                 eth_status = 'UNKNOWN'
                 wifi_status = 'UNKNOWN'
-            elif age < 120 and wifi_status == "DOWN":                         
+            elif age < 120 and wifi_status == "DOWN":
                 attention_needed = 'MAYBE'
             else:
                 attention_needed = "NO"
@@ -199,9 +211,10 @@ def on_message(client, userdata, msg):
 
             # Add row to table
             report_table = update_table(report)
-    
+
     except json.decoder.JSONDecodeError as e:
         print("Error decoding JSON:", e)
+
 
 def main():
     # Define client and Callbacks
@@ -225,7 +238,7 @@ def main():
             report_table.sortby = "RPI_ID"
             send_slack_msg(report_table)
             # Generate the attention table (list of devices needing  attention)
-            attn_tab = attn_table(report_table, "ATTN")      
+            attn_tab = attn_table(report_table, "ATTN")
             send_slack_msg(attn_tab)
         else:
             print(report_table)

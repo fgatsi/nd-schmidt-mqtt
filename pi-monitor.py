@@ -216,9 +216,9 @@ def on_message(client, userdata, msg):
         print("Error decoding JSON:", e)
 
 
-def main():
+def main(experimental=False):
     # Define client and Callbacks
-    client = mqtt.Client()
+    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
     client.on_connect = on_connect
     client.on_message = on_message
 
@@ -236,14 +236,18 @@ def main():
             print(report_table)
             # Sort the table on RPI_ID to enhance presentation
             report_table.sortby = "RPI_ID"
-            send_slack_msg(report_table)
+            if not experimental:
+                send_slack_msg(report_table)
+
             # Generate the attention table (list of devices needing  attention)
             attn_tab = attn_table(report_table, "ATTN")
-            send_slack_msg(attn_tab)
+            if not experimental:
+                send_slack_msg(attn_tab)
         else:
             print(report_table)
-            print("SEE SLACK CHANNEL")
-            send_slack_msgtxt(report_table)
+            if not experimental:
+                print("SEE SLACK CHANNEL")
+                send_slack_msgtxt(report_table)
 
         client.disconnect()
         client.loop_stop()

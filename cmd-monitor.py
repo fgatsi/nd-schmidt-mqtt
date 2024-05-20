@@ -4,6 +4,8 @@ from paho.mqtt import client as mqtt
 from slack_bolt import App
 import logging
 from datetime import datetime, timezone
+import importlib
+pi_monitor = importlib.import_module("pi-monitor")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--experimental", action="store_true",
@@ -174,6 +176,9 @@ def respond_cmd(ack, respond, command):
     cmd = splits[0]
     if cmd == "help":
         respond(blocks=help_text)
+        return
+    elif cmd == "list":
+        pi_monitor.main(args.experimental)
         return
 
     rpi_id = splits[1]

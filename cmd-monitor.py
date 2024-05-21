@@ -178,6 +178,7 @@ def respond_cmd(ack, respond, command):
         respond(blocks=help_text)
         return
     elif cmd == "list":
+        respond("Listing all Pis...")
         pi_monitor.main(args.experimental)
         return
 

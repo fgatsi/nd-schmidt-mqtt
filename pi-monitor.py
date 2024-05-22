@@ -66,8 +66,6 @@ def attn_table(table, column_name):
     # Get the index of the column using the column name
     column_index = table.field_names.index(column_name)
     attn_table.field_names = table.field_names
-    attn_table.title = "@Francis: The following RPIs need attention."
-    table.header_style = "title"
     # Loop through old table rows and filter by 'attn' column
     for row in table._rows:
         if row[column_index] in ["MAYBE", "YES"]:
@@ -122,6 +120,23 @@ def send_slack_msgtxt(input_table):
                     "type": "mrkdwn",
                     "text": (f"```{table}\n\nALL GOOD! No node needs "
                              f"attention right now```")
+                }
+            }
+        ]
+    }
+    slack_conf = load_slack_config()
+    requests.post(slack_conf['url'], json=payload)
+
+
+# Send a string
+def send_slack_msg_str(input_str):
+    payload = {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": input_str
                 }
             }
         ]
@@ -269,9 +284,12 @@ def main(experimental=False):
             # Generate the attention table (list of devices needing  attention)
             attn_tab = attn_table(report_table, "ATTN")
             attn_tab.sortby = "RPI_ID"
-            print(attn_tab)
+            print(f"Attention table:\n{attn_tab}")
             if not experimental:
-                send_slack_msg(attn_tab)
+                attn_msg = (f"<@U048TQS3XUK> <@U05QKN65PEY>: The "
+                            f"following RPIs need attention.\n```"
+                            f"{attn_tab.get_string()}```")
+                send_slack_msg_str(attn_msg)
         else:
             print(report_table)
             if not experimental:

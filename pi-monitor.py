@@ -12,6 +12,8 @@ topic = "Schmidt/+/report/status"
 
 # Initialize a report dictionary
 report = {}
+attn_list = []
+excl_list = ["RPI-02", "RPI-03", "RPI-08", "RPI-15"]
 
 # Initialize a pretty_table object
 report_table = PrettyTable()
@@ -45,16 +47,14 @@ def update_table(message):
     return report_table
 
 
-attn_list = []
-
-
 def test_for_attention(table, column_name):
     global attn_list
     # Get the index of the column using the column name
     column_index = table.field_names.index(column_name)
     for row in table._rows:
         attn_list.append(row[column_index])
-    if "MAYBE" not in attn_list and "YES" not in attn_list:
+    # if "MAYBE" not in attn_list and "YES" not in attn_list:
+    if "YES" not in attn_list:
         attn = False  # No pi needs attention
     else:
         attn = True  # At least one pi needs attention
@@ -68,7 +68,7 @@ def attn_table(table, column_name):
     attn_table.field_names = table.field_names
     # Loop through old table rows and filter by 'attn' column
     for row in table._rows:
-        if row[column_index] in ["MAYBE", "YES"]:
+        if row[column_index] == "YES":
             attn_table.add_row(row)
     return attn_table
 
@@ -154,6 +154,14 @@ def retrieve_id(mac):
     return None  # Return None if no match is found
 
 
+def exclusion_check(report_):
+    global excl_list
+    if report_["RPI_ID"] in excl_list and report_["ETH_Status"] == "DOWN":
+        report_["ETH_Status"] = "N/A"
+    elif report_["RPI_ID"] in excl_list and report_["WiFi_Status"] == "DOWN":
+        report_["WiFi_Status"] = "N/A"
+
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("------------Connected successfully, please wait for the "
@@ -228,31 +236,42 @@ def on_message(client, userdata, msg):
                     "UP" if wifi_status
                     else "DOWN"
                 )
-
-            if age > 120:
-                attention_needed = "YES"
-                eth_status = 'UNKNOWN'
-                wifi_status = 'UNKNOWN'
-            elif age < 120 and actual_wifi_status == "DOWN":
-                attention_needed = 'MAYBE'
-            else:
-                attention_needed = "NO"
-
-            # Generate the row  corresponding to this raspberry pi
             report["RPI_ID"] = id  # Pi_id
             report["MAC"] = retained_msg["mac"]  # for eth0
             report["ETH_Status"] = eth_status
             report["WiFi_Status"] = actual_wifi_status
 
+            # Apply exclusion to ensure avoid misleading status info
+            exclusion_check(report)
+            # Determine whether attention is required, considering
+            # age of report, ethernet or Wi-Fi status
+            if age > 120:
+                attention_needed = "YES"
+                report["ETH_Status"] = 'UNKNOWN'
+                report["WiFi_Status"] = 'UNKNOWN'
+            elif age < 120 and report["WiFi_Status"] == "DOWN":
+                attention_needed = 'MAYBE'
+            elif age < 120 and report["ETH_Status"] == "DOWN":
+                attention_needed = 'MAYBE'
+            elif age < 120 and (report["ETH_Status"] == "UP" and report["WiFi_Status"] == "N/A"):
+                attention_needed = 'NO'
+            elif age < 120 and (report["ETH_Status"] == "N/A" and report["WiFi_Status"] == "UP"):
+                attention_needed = 'NO'
+            else:
+                attention_needed = "NO"
+
+            # Format the last report time
             if age < 2:
                 report["Last_Report"] = f"{age} min ago"
             else:
                 report["Last_Report"] = f"{age} mins ago"
 
+            # Add the attention column (make it the last column)
             report["Attention"] = attention_needed
 
             # Add row to table
             report_table = update_table(report)
+            # print(report_table)
 
     except json.decoder.JSONDecodeError as e:
         print("Error decoding JSON:", e)
@@ -272,7 +291,7 @@ def main(experimental=False):
     client.loop_start()
 
     try:
-        time.sleep(10)
+        time.sleep(55)
         test = test_for_attention(report_table, "ATTN")
         if test:
             # Sort the table on RPI_ID to enhance presentation
@@ -291,6 +310,7 @@ def main(experimental=False):
                             f"{attn_tab.get_string()}```")
                 send_slack_msg_str(attn_msg)
         else:
+            report_table.sortby = "RPI_ID"
             print(report_table)
             if not experimental:
                 print("SEE SLACK CHANNEL")

@@ -4,41 +4,7 @@ from prettytable import PrettyTable
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import math
-
-#  List of Mac addresses of devices
-mac_pi = [
-    {
-        "RPI-01": "DC-A6-32-1D-A4-E0",
-        "RPI-02": "8E-51-F9-59-3F-8D",
-        "RPI-03": "D8-3A-DD-41-AA-94",
-        "RPI-04": "D8-3A-DD-4C-C4-9E",
-        "RPI-05": "D8-3A-DD-4C-C5-19",
-        "RPI-06": "D8-3A-DD-4C-C5-B5",
-        "RPI-07": "D8-3A-DD-4C-C5-CE",
-        "RPI-11": "D8-3A-DD-63-C6-76",
-        "RPI-12": "D8-3A-DD-5C-E1-94",
-        "RPI-13": "D8-3A-DD-5C-E3-DB",
-        "RPI-14": "D8-3A-DD-5C-A3-9A",
-        "RPI-15": "D8-3A-DD-63-C8-5A",
-        #"RPI-16": "D8-3A-DD-63-C6-5F",
-        #"RPI-17": "D8-3A-DD-5C-E4-0B",
-        #"RPI-18": "D8-3A-DD-5C-E2-87",
-        #"RPI-19": "D8-3A-DD-5C-A5-54",
-        #"RPI-20": "D8-3A-DD-5C-E3-EE",
-        #"RPI-21": "D8-3A-DD-5C-E2-AE",
-        #"RPI-22": "D8-3A-DD-63-C7-C3",
-        #"RPI-23": "D8-3A-DD-63-C6-CB",
-        #"RPI-24": "D8-3A-DD-63-C7-93",
-        #"RPI-25": "D8-3A-DD-5C-E1-F1",
-        #"RPI-26": "D8-3A-DD-5C-E5-98",
-        #"RPI-27": "D8-3A-DD-63-C7-20",
-        #"RPI-28": "D8-3A-DD-5C-E4-D5",
-        #"RPI-29": "D8-3A-DD-5C-E2-0C",
-        #"RPI-30": "D8-3A-DD-63-C7-BA"
-    }]
-
-# Path to device-list file
-file_path = "/Users/fgatsi/device_list.json"
+import argparse
 
 
 def load_config():
@@ -141,14 +107,14 @@ def calculate_age(data):
 
 
 # Main function
-def main():
+def main(device_file_path):
     # Create a list of dictionaries (LoD) from the json file
-    device_list = get_last_data(file_path)
+    device_list = get_last_data(device_file_path)
     pi_dict = [load_config()]
     # Convert dictionary to a JSON object
     # pi_dev = [json.dumps(pi_dict, indent=4)]
     # print(pi_dev)
-    # Flatten the dictionary inside the mac_pi list for easier access
+    # Flatten the dictionary inside the device dictionary for easier access
     lookup = {v: k for d in pi_dict for k, v in d.items()}
 
     # Add the appropriate RPI identifier to each entry in device_list
@@ -184,4 +150,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Create an ArgumentParser object
+    parser = argparse.ArgumentParser(description='Receive an input file.')
+    # Expected argument
+    parser.add_argument('input_file', type=str, help='The path to the device file')
+    # Parse the arguments
+    args = parser.parse_args()
+    # Use the input file
+    device_file_path = args.input_file
+    main(device_file_path)

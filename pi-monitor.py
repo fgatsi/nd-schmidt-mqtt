@@ -14,9 +14,9 @@ topic = "Schmidt/+/report/status"
 report = {}
 
 # Initialize a pretty_table object
-test_table = PrettyTable()
-test_table.field_names = ["RPI_ID", "MAC", "ETH_STATUS", "WIFI_STATUS",
-                          "LAST_REPORT", "ATTN"]
+report_table = PrettyTable()
+report_table.field_names = ["RPI_ID", "MAC", "ETH_STATUS", "WIFI_STATUS",
+                            "LAST_REPORT", "ATTN"]
 
 
 # Calculate the time difference given ISO format times with timezones as a
@@ -39,10 +39,10 @@ def calculate_iso_difference(time_str1, time_str2):
 
 # This function takes a dictionary as input and add rows to the existing table
 def update_table(message):
-    global test_table
+    global report_table
     report_values = list(message.values())
-    test_table.add_row(report_values)
-    return test_table
+    report_table.add_row(report_values)
+    return report_table
 
 
 attn_list = []
@@ -57,7 +57,7 @@ def test_for_attention(table, column_name):
     if "MAYBE" not in attn_list and "YES" not in attn_list:
         attn = False  # No pi needs attention
     else:
-        attn = True   # At least one pi needs attention
+        attn = True  # At least one pi needs attention
     return attn
 
 
@@ -148,7 +148,7 @@ def on_connect(client, userdata, flags, rc):
 
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
-    global report, report_table, eth0_data, wlan0_data
+    global report, report_table, eth0_data, wlan0_data, wlan1_data, wifi_status1
 
     try:
         pi_mac = msg.topic.split("/")[1]
@@ -165,6 +165,11 @@ def on_message(client, userdata, msg):
             # Get the Ethernet and Wi-Fi status
             out_data = retained_msg['out']
             interfaces = out_data['ifaces']
+
+            eth0_data = {}
+            wlan0_data = {}
+            wlan1_data = {}
+
             # Iterate through the list of interfaces
             for interface in interfaces:
                 if interface["name"] == "eth0":
@@ -179,19 +184,41 @@ def on_message(client, userdata, msg):
                         'ip_address': interface['ip_address'],
                         'mac_address': interface['mac_address']
                     }
+                elif interface["name"] == "wlan1":
+                    wlan1_data = {
+                        'up': interface['up'],
+                        'ip_address': interface['ip_address'],
+                        'mac_address': interface['mac_address']
+                    }
 
             # Testing
             eth_status = ("UP" if eth0_data['up'] and eth0_data['ip_address']
                           else "DOWN")
             wifi_status = (
-                "UP" if wlan0_data['up'] and wlan0_data['ip_address']
-                else "DOWN")
+                True if wlan0_data['up'] and wlan0_data['ip_address']
+                else False)
+
+            if wlan1_data:
+                wifi_status1 = (
+                    True if wlan1_data.get('up') and wlan1_data.get('ip_address')
+                    else False
+                )
+
+                actual_wifi_status = (
+                    "UP" if wifi_status or wifi_status1
+                    else "DOWN"
+                )
+            else:
+                actual_wifi_status = (
+                    "UP" if wifi_status
+                    else "DOWN"
+                )
 
             if age > 120:
                 attention_needed = "YES"
                 eth_status = 'UNKNOWN'
                 wifi_status = 'UNKNOWN'
-            elif age < 120 and wifi_status == "DOWN":
+            elif age < 120 and actual_wifi_status == "DOWN":
                 attention_needed = 'MAYBE'
             else:
                 attention_needed = "NO"
@@ -200,7 +227,7 @@ def on_message(client, userdata, msg):
             report["RPI_ID"] = id  # Pi_id
             report["MAC"] = retained_msg["mac"]  # for eth0
             report["ETH_Status"] = eth_status
-            report["WiFi_Status"] = wifi_status
+            report["WiFi_Status"] = actual_wifi_status
 
             if age < 2:
                 report["Last_Report"] = f"{age} min ago"

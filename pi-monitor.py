@@ -12,6 +12,7 @@ topic = "Schmidt/+/report/status"
 
 # Initialize a report dictionary
 report = {}
+seen = set()
 attn_list = []
 excl_list = ["RPI-02", "RPI-03", "RPI-08", "RPI-15"]
 
@@ -172,7 +173,6 @@ def on_connect(client, userdata, flags, rc):
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
     global report, report_table, eth0_data, wlan0_data, wlan1_data, wifi_status1
-
     try:
         pi_mac = msg.topic.split("/")[1]
         if len(pi_mac) == 17 and retrieve_id(pi_mac):
@@ -269,8 +269,10 @@ def on_message(client, userdata, msg):
             # Add the attention column (make it the last column)
             report["Attention"] = attention_needed
 
-            # Add row to table
-            report_table = update_table(report)
+            # Add row to table uniquely
+            if report["RPI_ID"] not in seen:
+                seen.add(report["RPI_ID"])
+                report_table = update_table(report)
             # print(report_table)
 
     except json.decoder.JSONDecodeError as e:
@@ -291,7 +293,7 @@ def main(experimental=False):
     client.loop_start()
 
     try:
-        time.sleep(55)
+        time.sleep(20)
         test = test_for_attention(report_table, "ATTN")
         if test:
             # Sort the table on RPI_ID to enhance presentation

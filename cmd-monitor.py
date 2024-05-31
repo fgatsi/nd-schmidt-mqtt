@@ -89,6 +89,9 @@ help_text = create_markdown_block(
     f"`{command_string} restartsrv RPI-ID [mqtt|speedtest]`: Restart all "
     f"services in the selected Pi, can specify which service to restart.\n"
     f"\n"
+    f"`{command_string} disablesrv RPI-ID`: Disable the speedtest service "
+    f"and remove update cronjob. This can be restored using update command.\n"
+    f"\n"
     f"`{command_string} update RPI-ID`: Run `pi-install.sh` script to update "
     f"the selected Pi.\n"
     f"\n"
@@ -317,6 +320,15 @@ def on_message(client, userdata, msg):
                             'out']['returncode'].items()}
                 }
                 text = f"```{dict_to_string(out_dict)}```"
+            slack_block = create_markdown_block(text)
+            send_slack_blocks(rpi_id, slack_block)
+
+        case "disablesrv":
+            if msg_payload["result"] != "success":
+                text = ("```Disabling speedtest service error: "
+                        f"{json.dumps(msg_payload['err'])}```")
+            else:
+                text = f"```Disabling speedtest service success!```"
             slack_block = create_markdown_block(text)
             send_slack_blocks(rpi_id, slack_block)
 

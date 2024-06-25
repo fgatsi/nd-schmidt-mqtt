@@ -145,6 +145,7 @@ def main(device_file_path):
     table.field_names = ['RPI_ID', 'UP', 'LAST_HB', 'LAST_TEST_ETH',
                          'LAST_TEST_WLAN', '#DATA', 'CAP']
     table.title = "DATA FROM FIREBASE"
+    updated_data = sorted(updated_data, key=lambda x: x["RPI_ID"])
     for item in updated_data:
         max_num_data = max(filter(
             lambda x: x is not None,
@@ -160,8 +161,13 @@ def main(device_file_path):
              item['last_test_wlan'],
              f"{round(max_num_data)} days",
              "YES" if item["data_used_gbytes"] > 100 else "NO"])
+        if len(table.get_string()) > 2800:
+            # Split data due to Slack 3000-characters limit
+            print(table)
+            if not args.experimental:
+                send_slack_msg(table)
+            table.clear_rows()
 
-    table.sortby = "RPI_ID"
     print(table)
     if not args.experimental:
         send_slack_msg(table)

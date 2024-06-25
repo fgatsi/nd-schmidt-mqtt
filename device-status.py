@@ -98,9 +98,17 @@ def calculate_age(data):
             timestamp_str = item.get(key)
             if timestamp_str and timestamp_str != 'NaN':
                 timestamp_dt = ms_to_iso(timestamp_str)
-                age_delta = calculate_iso_difference(current_time, timestamp_dt)
-                age_minutes = int(age_delta / 60.0)
-                item[key] = f"{age_minutes} min(s) ago"
+                age_delta = calculate_iso_difference(
+                    current_time, timestamp_dt)
+                age_suffix = "mins"
+                age_str = int(age_delta / 60.0)     # minutes
+                if age_str > 120:
+                    age_str = int(age_str / 60.0)     # hours
+                    age_suffix = "hrs"
+                if age_str > 48:
+                    age_str = int(age_str / 24.0)     # days
+                    age_suffix = "days"
+                item[key] = f"{age_str} {age_suffix} ago"
             elif timestamp_str == 'NaN':
                 item[key] = 'N/A'
     return data
@@ -134,26 +142,45 @@ def main(device_file_path):
 
     # Define and print the new table with age strings
     table = PrettyTable()
-    table.field_names = ['RPI_ID', 'ONLINE', 'LAST_HB', 'LAST_TEST_ETH', 'LAST_TEST_WLAN']
+    table.field_names = ['RPI_ID', 'UP', 'LAST_HB', 'LAST_TEST_ETH',
+                         'LAST_TEST_WLAN', '#DATA', 'CAP']
     table.title = "DATA FROM FIREBASE"
+    updated_data = sorted(updated_data, key=lambda x: x["RPI_ID"])
     for item in updated_data:
-        if item['online']:
-            item['online'] = 'YES'
-        else:
-            item['online'] = 'NO'
+        max_num_data = max(filter(
+            lambda x: x is not None,
+            [item["day_worth_of_dl_data_eth"],
+             item["day_worth_of_dl_data_wlan"],
+             item["day_worth_of_ul_data_eth"],
+             item["day_worth_of_ul_data_wlan"]]))
         table.add_row(
-            [item['RPI_ID'], item['online'], item['last_timestamp'], item['last_test_eth'], item['last_test_wlan']])
+            [item['RPI_ID'],
+             "YES" if item["online"] else "NO",
+             item['last_timestamp'],
+             item['last_test_eth'],
+             item['last_test_wlan'],
+             f"{round(max_num_data)} days",
+             "YES" if item["data_used_gbytes"] > 100 else "NO"])
+        if len(table.get_string()) > 2800:
+            # Split data due to Slack 3000-characters limit
+            print(table)
+            if not args.experimental:
+                send_slack_msg(table)
+            table.clear_rows()
 
-    table.sortby = "RPI_ID"
     print(table)
-    send_slack_msg(table)
+    if not args.experimental:
+        send_slack_msg(table)
 
 
 if __name__ == "__main__":
     # Create an ArgumentParser object
     parser = argparse.ArgumentParser(description='Receive an input file.')
     # Expected argument
-    parser.add_argument('input_file', type=str, help='The path to the device file')
+    parser.add_argument('input_file', type=str,
+                        help='The path to the device file')
+    parser.add_argument("--experimental", action="store_true",
+                        help="Enable experimental mode")
     # Parse the arguments
     args = parser.parse_args()
     # Use the input file

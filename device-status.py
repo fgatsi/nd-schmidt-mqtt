@@ -146,14 +146,18 @@ def main(device_file_path):
 
     table.sortby = "RPI_ID"
     print(table)
-    send_slack_msg(table)
+    if not args.experimental:
+        send_slack_msg(table)
 
 
 if __name__ == "__main__":
     # Create an ArgumentParser object
     parser = argparse.ArgumentParser(description='Receive an input file.')
     # Expected argument
-    parser.add_argument('input_file', type=str, help='The path to the device file')
+    parser.add_argument('input_file', type=str,
+                        help='The path to the device file')
+    parser.add_argument("--experimental", action="store_true",
+                        help="Enable experimental mode")
     # Parse the arguments
     args = parser.parse_args()
     # Use the input file

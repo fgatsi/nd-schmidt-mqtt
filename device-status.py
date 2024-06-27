@@ -143,23 +143,18 @@ def main(device_file_path):
     # Define and print the new table with age strings
     table = PrettyTable()
     table.field_names = ['RPI_ID', 'UP', 'LAST_HB', 'LAST_TEST_ETH',
-                         'LAST_TEST_WLAN', '#DATA', 'CAP']
+                         'LAST_TEST_WLAN', '#DAY', '#WEEK', 'CAP']
     table.title = "DATA FROM FIREBASE"
     updated_data = sorted(updated_data, key=lambda x: x["RPI_ID"])
     for item in updated_data:
-        max_num_data = max(filter(
-            lambda x: x is not None,
-            [item["day_worth_of_dl_data_eth"],
-             item["day_worth_of_dl_data_wlan"],
-             item["day_worth_of_ul_data_eth"],
-             item["day_worth_of_ul_data_wlan"]]))
         table.add_row(
             [item['RPI_ID'],
              "YES" if item["online"] else "NO",
              item['last_timestamp'],
              item['last_test_eth'],
              item['last_test_wlan'],
-             f"{round(max_num_data)} days",
+             item['total_day'],
+             item['total_consecutive_week'],
              "YES" if item["data_used_gbytes"] > 100 else "NO"])
         if len(table.get_string()) > 2800:
             # Split data due to Slack 3000-characters limit

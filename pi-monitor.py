@@ -15,6 +15,7 @@ report = {}
 seen = set()
 attn_list = []
 excl_list = ["RPI-02", "RPI-03", "RPI-08", "RPI-15"]
+ignore_list = ["RPI-02", "RPI-08"]
 
 # Initialize a pretty_table object
 report_table = PrettyTable()
@@ -172,7 +173,8 @@ def on_connect(client, userdata, flags, rc):
 
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
-    global report, report_table, eth0_data, wlan0_data, wlan1_data, wifi_status1
+    global report, report_table, ignore_list
+    global eth0_data, wlan0_data, wlan1_data, wifi_status1
     try:
         pi_mac = msg.topic.split("/")[1]
         if len(pi_mac) == 17 and retrieve_id(pi_mac):
@@ -245,7 +247,9 @@ def on_message(client, userdata, msg):
             exclusion_check(report)
             # Determine whether attention is required, considering
             # age of report, ethernet or Wi-Fi status
-            if age > 120:
+            if id in ignore_list:
+                attention_needed = "IGNR."
+            elif age > 120:
                 attention_needed = "YES"
                 report["ETH_Status"] = 'UNKNOWN'
                 report["WiFi_Status"] = 'UNKNOWN'

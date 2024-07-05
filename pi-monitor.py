@@ -19,7 +19,7 @@ ignore_list = ["RPI-02", "RPI-08"]
 
 # Initialize a pretty_table object
 report_table = PrettyTable()
-report_table.field_names = ["RPI_ID", "MAC", "ETH_STATUS", "WIFI_STATUS",
+report_table.field_names = ["RPI_ID", "MAC", "ETH", "WIFI",
                             "LAST_REPORT", "ATTN"]
 
 
@@ -251,8 +251,8 @@ def on_message(client, userdata, msg):
                 attention_needed = "IGNR."
             elif age > 120:
                 attention_needed = "YES"
-                report["ETH_Status"] = 'UNKNOWN'
-                report["WiFi_Status"] = 'UNKNOWN'
+                report["ETH_Status"] = 'UNK.'
+                report["WiFi_Status"] = 'UNK.'
             elif age < 120 and report["WiFi_Status"] == "DOWN":
                 attention_needed = 'MAYBE'
             elif age < 120 and report["ETH_Status"] == "DOWN":
@@ -302,9 +302,17 @@ def main(experimental=False):
         if test:
             # Sort the table on RPI_ID to enhance presentation
             report_table.sortby = "RPI_ID"
-            print(report_table)
-            if not experimental:
-                send_slack_msg(report_table)
+            # Split data due to Slack 3000-characters limit
+            table_size = len(report_table.rows)
+            start_idx = 0
+            for i in range(1, table_size + 1):
+                temp_table = report_table[start_idx:i]
+                if (i == table_size
+                        or len(temp_table.get_string()) > 2800):
+                    print(temp_table)
+                    start_idx = i
+                    if not experimental:
+                        send_slack_msg(temp_table)
 
             # Generate the attention table (list of devices needing  attention)
             attn_tab = attn_table(report_table, "ATTN")

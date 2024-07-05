@@ -225,7 +225,8 @@ def on_message(client, userdata, msg):
 
             if wlan1_data:
                 wifi_status1 = (
-                    True if wlan1_data.get('up') and wlan1_data.get('ip_address')
+                    True if (wlan1_data.get('up')
+                             and wlan1_data.get('ip_address'))
                     else False
                 )
 
@@ -257,9 +258,11 @@ def on_message(client, userdata, msg):
                 attention_needed = 'MAYBE'
             elif age < 120 and report["ETH_Status"] == "DOWN":
                 attention_needed = 'MAYBE'
-            elif age < 120 and (report["ETH_Status"] == "UP" and report["WiFi_Status"] == "N/A"):
+            elif age < 120 and (report["ETH_Status"] == "UP"
+                                and report["WiFi_Status"] == "N/A"):
                 attention_needed = 'NO'
-            elif age < 120 and (report["ETH_Status"] == "N/A" and report["WiFi_Status"] == "UP"):
+            elif age < 120 and (report["ETH_Status"] == "N/A"
+                                and report["WiFi_Status"] == "UP"):
                 attention_needed = 'NO'
             else:
                 attention_needed = "NO"

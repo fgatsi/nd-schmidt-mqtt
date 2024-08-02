@@ -15,7 +15,7 @@ report = {}
 seen = set()
 attn_list = []
 excl_list = ["RPI-02", "RPI-03", "RPI-08", "RPI-15"]
-ignore_list = ["RPI-02", "RPI-08"]
+ignore_list = ["RPI-02", "RPI-08", "RPI-09", "RPI-18"]
 
 # Initialize a pretty_table object
 report_table = PrettyTable()

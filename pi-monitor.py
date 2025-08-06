@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from prettytable import PrettyTable
 import argparse
+import firebase
 
 # Topic expression using a single wildcard
 topic = "Schmidt/+/report/status"
@@ -177,8 +178,8 @@ def on_message(client, userdata, msg):
     global eth0_data, wlan0_data, wlan1_data, wifi_status1
     try:
         pi_mac = msg.topic.split("/")[1]
-        if len(pi_mac) == 17 and retrieve_id(pi_mac):
-            id = retrieve_id(pi_mac)
+        rpi_id = firebase.get_rpi_id_from_mac(pi_mac)
+        if (rpi_id is not None and rpi_id.startswith("RPI-")):
 
             # get the published msg, extract the timestamp and calculate age
             retained_msg = json.loads(msg.payload.decode())
@@ -239,7 +240,7 @@ def on_message(client, userdata, msg):
                     "UP" if wifi_status
                     else "DOWN"
                 )
-            report["RPI_ID"] = id  # Pi_id
+            report["RPI_ID"] = rpi_id  # Pi_id
             report["MAC"] = retained_msg["mac"]  # for eth0
             report["ETH_Status"] = eth_status
             report["WiFi_Status"] = actual_wifi_status

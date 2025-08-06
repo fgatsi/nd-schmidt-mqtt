@@ -20,8 +20,8 @@ ignore_list = ["RPI-02", "RPI-08", "RPI-09", "RPI-18"]
 
 # Initialize a pretty_table object
 report_table = PrettyTable()
-report_table.field_names = ["RPI_ID", "MAC", "ETH", "WIFI",
-                            "LAST_REPORT", "ATTN"]
+report_table.field_names = ["RPI-ID", "MAC", "ETH", "WIFI",
+                            "LAST REPORT", "ATTN"]
 
 
 # Calculate the time difference given ISO format times with timezones as a
@@ -40,6 +40,49 @@ def calculate_iso_difference(time_str1, time_str2):
     time_diff = time_diff.total_seconds()
     # Return total seconds
     return time_diff
+
+
+def format_minutes_to_human_readable(total_minutes: int) -> str:
+    """
+    Converts a given number of minutes into a human-readable string
+    using the largest appropriate unit (minutes, hours, days, or months).
+
+    Args:
+        total_minutes (int): The total number of minutes.
+
+    Returns:
+        str: A formatted string representing the duration.
+             Returns "0 minutes" if total_minutes is 0.
+             Returns an empty string if total_minutes is negative.
+    """
+    if total_minutes <= 0:
+        return "0 mins"
+
+    # Define conversion constants
+    MINUTES_IN_HOUR = 60
+    MINUTES_IN_DAY = MINUTES_IN_HOUR * 24
+    MINUTES_IN_WEEK = MINUTES_IN_DAY * 7
+    # Approximating a month as 30 days for simplicity
+    MINUTES_IN_MONTH = MINUTES_IN_DAY * 30
+
+    # Prioritize larger units
+    if total_minutes >= MINUTES_IN_MONTH:
+        # Calculate months and remaining minutes
+        months = total_minutes // MINUTES_IN_MONTH
+        # For simplicity, we'll just show months here.
+        return f"{months} Mth{'s' if months != 1 else ''}"
+    elif total_minutes >= MINUTES_IN_WEEK:
+        days = total_minutes // MINUTES_IN_WEEK
+        return f"{days} wk{'s' if days != 1 else ''}"
+    elif total_minutes >= MINUTES_IN_DAY:
+        days = total_minutes // MINUTES_IN_DAY
+        return f"{days} day{'s' if days != 1 else ''}"
+    elif total_minutes >= MINUTES_IN_HOUR:
+        hours = total_minutes // MINUTES_IN_HOUR
+        return f"{hours} hr{'s' if hours != 1 else ''}"
+    else:
+        # If less than an hour, show in minutes
+        return f"{total_minutes} min{'s' if total_minutes != 1 else ''}"
 
 
 # This function takes a dictionary as input and add rows to the existing table
@@ -159,9 +202,9 @@ def retrieve_id(mac):
 
 def exclusion_check(report_):
     global excl_list
-    if report_["RPI_ID"] in excl_list and report_["ETH_Status"] == "DOWN":
+    if report_["RPI-ID"] in excl_list and report_["ETH_Status"] == "DOWN":
         report_["ETH_Status"] = "N/A"
-    elif report_["RPI_ID"] in excl_list and report_["WiFi_Status"] == "DOWN":
+    elif report_["RPI-ID"] in excl_list and report_["WiFi_Status"] == "DOWN":
         report_["WiFi_Status"] = "N/A"
 
 
@@ -240,7 +283,7 @@ def on_message(client, userdata, msg):
                     "UP" if wifi_status
                     else "DOWN"
                 )
-            report["RPI_ID"] = rpi_id  # Pi_id
+            report["RPI-ID"] = rpi_id  # Pi_id
             report["MAC"] = retained_msg["mac"]  # for eth0
             report["ETH_Status"] = eth_status
             report["WiFi_Status"] = actual_wifi_status
@@ -249,12 +292,16 @@ def on_message(client, userdata, msg):
             exclusion_check(report)
             # Determine whether attention is required, considering
             # age of report, ethernet or Wi-Fi status
-            if id in ignore_list:
-                attention_needed = "IGNR."
+            if rpi_id in ignore_list:
+                attention_needed = "IGNR"
             elif age > 120:
-                attention_needed = "YES"
-                report["ETH_Status"] = 'UNK.'
-                report["WiFi_Status"] = 'UNK.'
+                report["ETH_Status"] = 'UNK'
+                report["WiFi_Status"] = 'UNK'
+                if age > 20160:
+                    # Ignore if RPI age is more than 2 weeks
+                    attention_needed = "IGNR"
+                else:
+                    attention_needed = "YES"
             elif age < 120 and report["WiFi_Status"] == "DOWN":
                 attention_needed = 'MAYBE'
             elif age < 120 and report["ETH_Status"] == "DOWN":
@@ -269,17 +316,14 @@ def on_message(client, userdata, msg):
                 attention_needed = "NO"
 
             # Format the last report time
-            if age < 2:
-                report["Last_Report"] = f"{age} min ago"
-            else:
-                report["Last_Report"] = f"{age} mins ago"
+            report["LAST REPORT"] = format_minutes_to_human_readable(age)
 
             # Add the attention column (make it the last column)
             report["Attention"] = attention_needed
 
             # Add row to table uniquely
-            if report["RPI_ID"] not in seen:
-                seen.add(report["RPI_ID"])
+            if report["RPI-ID"] not in seen:
+                seen.add(report["RPI-ID"])
                 report_table = update_table(report)
             # print(report_table)
 
@@ -304,8 +348,8 @@ def main(experimental=False):
         time.sleep(20)
         test = test_for_attention(report_table, "ATTN")
         if test:
-            # Sort the table on RPI_ID to enhance presentation
-            report_table.sortby = "RPI_ID"
+            # Sort the table on RPI-ID to enhance presentation
+            report_table.sortby = "RPI-ID"
             # Split data due to Slack 3000-characters limit
             table_size = len(report_table.rows)
             start_idx = 0
@@ -320,7 +364,7 @@ def main(experimental=False):
 
             # Generate the attention table (list of devices needing  attention)
             attn_tab = attn_table(report_table, "ATTN")
-            attn_tab.sortby = "RPI_ID"
+            attn_tab.sortby = "RPI-ID"
             print(f"Attention table:\n{attn_tab}")
             if not experimental:
                 attn_msg = (f"<@U048TQS3XUK> <@U05QKN65PEY>: The "
@@ -328,7 +372,7 @@ def main(experimental=False):
                             f"{attn_tab.get_string()}```")
                 send_slack_msg_str(attn_msg)
         else:
-            report_table.sortby = "RPI_ID"
+            report_table.sortby = "RPI-ID"
             print(report_table)
             if not experimental:
                 print("SEE SLACK CHANNEL")

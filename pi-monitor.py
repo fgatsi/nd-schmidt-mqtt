@@ -331,7 +331,7 @@ def on_message(client, userdata, msg):
         print("Error decoding JSON:", e)
 
 
-def main(experimental=False):
+def main(experimental=False, timeout_sec=10):
     # Define client and Callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
     client.on_connect = on_connect
@@ -345,7 +345,7 @@ def main(experimental=False):
     client.loop_start()
 
     try:
-        time.sleep(20)
+        time.sleep(timeout_sec)
         test = test_for_attention(report_table, "ATTN")
         if test:
             # Sort the table on RPI-ID to enhance presentation
@@ -392,5 +392,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--experimental", action="store_true",
                         help="Enable experimental mode")
+    parser.add_argument("--timeout", type=int, default=10,
+                        help=("Timeout to wait for reports in seconds, "
+                              "default=10s"))
     args = parser.parse_args()
-    main(args.experimental)
+    main(args.experimental, args.timeout)

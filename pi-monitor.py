@@ -193,7 +193,7 @@ def on_message(client, userdata, msg):
         print("Error decoding JSON:", e)
 
 
-def main(experimental=False, timeout_sec=10):
+def main(experimental=False, timeout_sec=10, include_ignored=False):
     global reports
     # Define client and Callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
@@ -210,6 +210,10 @@ def main(experimental=False, timeout_sec=10):
     try:
         # Wait for reports to be populated
         time.sleep(timeout_sec)
+
+        # Filter out ignored rows
+        if not include_ignored:
+            reports = [row for row in reports if row["Attention"] != "IGNR"]
 
         # Print/send table to slack
         report_table = create_report_table(reports)
@@ -270,8 +274,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--experimental", action="store_true",
                         help="Enable experimental mode")
+    parser.add_argument("--include-ignored", action="store_true",
+                        help="Include ignored RPIs")
     parser.add_argument("--timeout", type=int, default=10,
                         help=("Timeout to wait for reports in seconds, "
                               "default=10s"))
     args = parser.parse_args()
-    main(args.experimental, args.timeout)
+    main(args.experimental, args.timeout, args.include_ignored)

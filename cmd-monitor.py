@@ -4,6 +4,7 @@ from paho.mqtt import client as mqtt
 from slack_bolt import App
 import logging
 from datetime import datetime, timezone
+import firebase
 import importlib
 pi_monitor = importlib.import_module("pi-monitor")
 
@@ -27,8 +28,6 @@ with open('.slack-config.json', 'r') as file:
     slack_conf = json.load(file)
 with open('.mqtt-config.json', 'r') as file:
     mqtt_conf = json.load(file)
-with open('.rpi-config.json', 'r') as file:
-    rpi_ids = json.load(file)
 
 app = App(
     token=slack_conf["bot_token"],
@@ -36,27 +35,6 @@ app = App(
 )
 
 topic_report_conf = f"Schmidt/+/report/config"
-
-
-def get_rpi_id(mac):
-    logging.info("Get Pi ID for mac: %s", mac)
-    rpi_id = [key for key, val in rpi_ids.items() if val == mac]
-    logging.debug("Got rpi_id: %s", rpi_id)
-    if len(rpi_id) == 0:
-        logging.warning("mac %s not found in the list of Pi IDs", mac)
-        return mac
-    else:
-        return rpi_id[0]
-
-
-def get_mac(rpi_id):
-    logging.info("Get mac for Pi ID: %s", rpi_id)
-    if rpi_id not in rpi_ids:
-        logging.warning("Pi ID %s not found in the list of Pi IDs", rpi_id)
-        return rpi_id
-    else:
-        logging.debug("Got mac: %s", rpi_ids[rpi_id])
-        return rpi_ids[rpi_id]
 
 
 def create_markdown_block(text):
@@ -186,9 +164,10 @@ def respond_cmd(ack, respond, command):
         return
 
     rpi_id = splits[1]
+    rpi_mac = firebase.get_mac_from_rpi_id(rpi_id)
     extras = splits[2] if len(splits) > 2 else ""
 
-    if rpi_id not in rpi_ids:
+    if rpi_mac is None:
         logging.warning("Invalid Pi ID: %s", rpi_id)
         respond(f"Error: {rpi_id} is invalid!")
         return
@@ -197,13 +176,13 @@ def respond_cmd(ack, respond, command):
     respond(f"Sending {cmd} command to {rpi_id}...")
 
     if cmd == "ping":
-        topic = f"Schmidt/{rpi_ids[rpi_id]}/config/{cmd}"
+        topic = f"Schmidt/{rpi_mac}/config/{cmd}"
         logging.info("Publishing to topic %s, message %s", topic, extras)
         client.publish(topic, extras, qos=1)
     else:
         if extras:
             cmd = f"{cmd}/{extras.replace(' ', '/')}"
-        topic = f"Schmidt/{rpi_ids[rpi_id]}/config/{cmd}"
+        topic = f"Schmidt/{rpi_mac}/config/{cmd}"
         logging.info("Publishing to topic %s", topic)
         client.publish(topic, "", qos=1)
 
@@ -245,7 +224,7 @@ def on_message(client, userdata, msg):
                      msg_payload["timestamp"])
         return
 
-    rpi_id = get_rpi_id(msg_payload["mac"])
+    rpi_id = firebase.get_rpi_id_from_mac(msg_payload["mac"])
     match msg_payload["type"]:
         case "ping":
             if msg_payload["result"] != "success":
@@ -373,5 +352,9 @@ if __name__ == '__main__':
         app.start(port=int(slack_conf["slack_port"]))
 
     except KeyboardInterrupt:
-        print("\nDisconnecting from the broker ...")
+        print("\nKeyboard interrupt !")
+
+    finally:
+        print("Disconnecting from the broker ...")
         client.disconnect()
+        client.loop_stop()

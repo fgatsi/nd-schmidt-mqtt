@@ -11,17 +11,9 @@ import firebase
 # Topic expression using a single wildcard
 topic = "Schmidt/+/report/status"
 
-# Initialize a report dictionary
-report = {}
+reports = list()
 seen = set()
-attn_list = []
-excl_list = ["RPI-02", "RPI-03", "RPI-08", "RPI-15"]
-ignore_list = ["RPI-02", "RPI-08", "RPI-09", "RPI-18"]
-
-# Initialize a pretty_table object
-report_table = PrettyTable()
-report_table.field_names = ["RPI-ID", "MAC", "ETH", "WIFI",
-                            "LAST REPORT", "ATTN"]
+TABLE_FIELD_NAMES = ["RPI-ID", "MAC", "ETH", "WIFI", "LAST REPORT", "ATTN"]
 
 
 # Calculate the time difference given ISO format times with timezones as a
@@ -85,38 +77,12 @@ def format_minutes_to_human_readable(total_minutes: int) -> str:
         return f"{total_minutes} min{'s' if total_minutes != 1 else ''}"
 
 
-# This function takes a dictionary as input and add rows to the existing table
-def update_table(message):
-    global report_table
-    report_values = list(message.values())
-    report_table.add_row(report_values)
-    return report_table
-
-
-def test_for_attention(table, column_name):
-    global attn_list
-    # Get the index of the column using the column name
-    column_index = table.field_names.index(column_name)
-    for row in table._rows:
-        attn_list.append(row[column_index])
-    # if "MAYBE" not in attn_list and "YES" not in attn_list:
-    if "YES" not in attn_list:
-        attn = False  # No pi needs attention
-    else:
-        attn = True  # At least one pi needs attention
-    return attn
-
-
-def attn_table(table, column_name):
-    attn_table = PrettyTable()
-    # Get the index of the column using the column name
-    column_index = table.field_names.index(column_name)
-    attn_table.field_names = table.field_names
-    # Loop through old table rows and filter by 'attn' column
-    for row in table._rows:
-        if row[column_index] == "YES":
-            attn_table.add_row(row)
-    return attn_table
+# Create a report table from list of dict
+def create_report_table(input_list):
+    table = PrettyTable()
+    table.field_names = TABLE_FIELD_NAMES
+    table.add_rows([row.values() for row in input_list])
+    return table
 
 
 def load_mqtt_config():
@@ -129,49 +95,6 @@ def load_slack_config():
     with open('.slack-config.json', 'r') as file:
         cf = json.load(file)
     return cf
-
-
-def load_devlist():
-    with open('.rpi-config.json', 'r') as file:
-        devlist = json.load(file)
-    return devlist
-
-
-# This function takes table as input and converts it into string
-def send_slack_msg(input_table):
-    table = input_table.get_string()
-    payload = {
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"```{table}```"
-                }
-            }
-        ]
-    }
-    slack_conf = load_slack_config()
-    requests.post(slack_conf['url'], json=payload)
-
-
-# This function takes table as input and converts it into string
-def send_slack_msgtxt(input_table):
-    table = input_table.get_string()
-    payload = {
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (f"```{table}\n\nALL GOOD! No node needs "
-                             f"attention right now```")
-                }
-            }
-        ]
-    }
-    slack_conf = load_slack_config()
-    requests.post(slack_conf['url'], json=payload)
 
 
 # Send a string
@@ -191,23 +114,6 @@ def send_slack_msg_str(input_str):
     requests.post(slack_conf['url'], json=payload)
 
 
-# This function takes MAC of a Pi as input and retrieves the corresponding ID
-def retrieve_id(mac):
-    pi_list = load_devlist()  # Load the list of devices
-    for key, value in pi_list.items():
-        if value == mac:
-            return key  # Return immediately when the MAC address matches
-    return None  # Return None if no match is found
-
-
-def exclusion_check(report_):
-    global excl_list
-    if report_["RPI-ID"] in excl_list and report_["ETH_Status"] == "DOWN":
-        report_["ETH_Status"] = "N/A"
-    elif report_["RPI-ID"] in excl_list and report_["WiFi_Status"] == "DOWN":
-        report_["WiFi_Status"] = "N/A"
-
-
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("------------Connected successfully, please wait for the "
@@ -217,101 +123,58 @@ def on_connect(client, userdata, flags, rc):
 
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
-    global report, report_table, ignore_list
-    global eth0_data, wlan0_data, wlan1_data, wifi_status1
+    global reports, seen
     try:
         pi_mac = msg.topic.split("/")[1]
         rpi_id = firebase.get_rpi_id_from_mac(pi_mac)
         if (rpi_id is not None and rpi_id.startswith("RPI-")):
-
+            report = dict()
             # get the published msg, extract the timestamp and calculate age
             retained_msg = json.loads(msg.payload.decode())
-            current_time = datetime.now(timezone.utc).astimezone().isoformat()
-            last_msg_time = retained_msg["timestamp"]
-            age = round(calculate_iso_difference(
-                current_time, last_msg_time) / 60)  # in minutes
+            current_time = datetime.now(timezone.utc)
+            last_msg_time = datetime.fromisoformat(
+                retained_msg["timestamp"]).astimezone(ZoneInfo('UTC'))
+            age = round((current_time - last_msg_time).total_seconds() / 60)
 
             # Get the Ethernet and Wi-Fi status
             out_data = retained_msg['out']
             interfaces = out_data['ifaces']
 
-            eth0_data = {}
-            wlan0_data = {}
-            wlan1_data = {}
+            default_iface = {
+                'up': None,
+                'ip_address': None,
+                'mac_address': None
+            }
+            eth0_data = next(
+                (iface for iface in interfaces if iface["name"] == "eth0"),
+                default_iface)
+            wlan0_data = next(
+                (iface for iface in interfaces if iface["name"] == "wlan0"),
+                default_iface)
+            wlan1_data = next(
+                (iface for iface in interfaces if iface["name"] == "wlan1"),
+                default_iface)
+            is_eth_up = (eth0_data['up'] and eth0_data['ip_address'])
+            is_wlan_up = (
+                (wlan0_data['up'] and wlan0_data['ip_address'])
+                or (wlan1_data['up'] and wlan1_data['ip_address']))
 
-            # Iterate through the list of interfaces
-            for interface in interfaces:
-                if interface["name"] == "eth0":
-                    eth0_data = {
-                        'up': interface['up'],
-                        'ip_address': interface['ip_address'],
-                        'mac_address': interface['mac_address']
-                    }
-                elif interface["name"] == "wlan0":
-                    wlan0_data = {
-                        'up': interface['up'],
-                        'ip_address': interface['ip_address'],
-                        'mac_address': interface['mac_address']
-                    }
-                elif interface["name"] == "wlan1":
-                    wlan1_data = {
-                        'up': interface['up'],
-                        'ip_address': interface['ip_address'],
-                        'mac_address': interface['mac_address']
-                    }
+            report["RPI-ID"] = rpi_id
+            report["MAC"] = retained_msg["mac"]  # eth0 MAC
+            report["ETH_Status"] = "UP" if is_eth_up else "DOWN"
+            report["WiFi_Status"] = "UP" if is_wlan_up else "DOWN"
 
-            # Testing
-            eth_status = ("UP" if eth0_data['up'] and eth0_data['ip_address']
-                          else "DOWN")
-            wifi_status = (
-                True if wlan0_data['up'] and wlan0_data['ip_address']
-                else False)
-
-            if wlan1_data:
-                wifi_status1 = (
-                    True if (wlan1_data.get('up')
-                             and wlan1_data.get('ip_address'))
-                    else False
-                )
-
-                actual_wifi_status = (
-                    "UP" if wifi_status or wifi_status1
-                    else "DOWN"
-                )
-            else:
-                actual_wifi_status = (
-                    "UP" if wifi_status
-                    else "DOWN"
-                )
-            report["RPI-ID"] = rpi_id  # Pi_id
-            report["MAC"] = retained_msg["mac"]  # for eth0
-            report["ETH_Status"] = eth_status
-            report["WiFi_Status"] = actual_wifi_status
-
-            # Apply exclusion to ensure avoid misleading status info
-            exclusion_check(report)
             # Determine whether attention is required, considering
             # age of report, ethernet or Wi-Fi status
-            if rpi_id in ignore_list:
+            if age > 20160:
+                # Ignore if RPI age is more than 2 weeks
                 attention_needed = "IGNR"
             elif age > 120:
-                report["ETH_Status"] = 'UNK'
-                report["WiFi_Status"] = 'UNK'
-                if age > 20160:
-                    # Ignore if RPI age is more than 2 weeks
-                    attention_needed = "IGNR"
-                else:
-                    attention_needed = "YES"
+                attention_needed = "YES"
             elif age < 120 and report["WiFi_Status"] == "DOWN":
                 attention_needed = 'MAYBE'
             elif age < 120 and report["ETH_Status"] == "DOWN":
                 attention_needed = 'MAYBE'
-            elif age < 120 and (report["ETH_Status"] == "UP"
-                                and report["WiFi_Status"] == "N/A"):
-                attention_needed = 'NO'
-            elif age < 120 and (report["ETH_Status"] == "N/A"
-                                and report["WiFi_Status"] == "UP"):
-                attention_needed = 'NO'
             else:
                 attention_needed = "NO"
 
@@ -321,17 +184,17 @@ def on_message(client, userdata, msg):
             # Add the attention column (make it the last column)
             report["Attention"] = attention_needed
 
-            # Add row to table uniquely
+            # Add only unique rows to reports
             if report["RPI-ID"] not in seen:
                 seen.add(report["RPI-ID"])
-                report_table = update_table(report)
-            # print(report_table)
+                reports.append(report)
 
     except json.decoder.JSONDecodeError as e:
         print("Error decoding JSON:", e)
 
 
 def main(experimental=False, timeout_sec=10):
+    global reports
     # Define client and Callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
     client.on_connect = on_connect
@@ -345,11 +208,15 @@ def main(experimental=False, timeout_sec=10):
     client.loop_start()
 
     try:
+        # Wait for reports to be populated
         time.sleep(timeout_sec)
-        test = test_for_attention(report_table, "ATTN")
-        if test:
-            # Sort the table on RPI-ID to enhance presentation
-            report_table.sortby = "RPI-ID"
+
+        # Print/send table to slack
+        report_table = create_report_table(reports)
+        report_table.sortby = "RPI-ID"
+        print(report_table)
+        if not experimental:
+            print("SENDING REPORT TABLE TO SLACK CHANNEL ...")
             # Split data due to Slack 3000-characters limit
             table_size = len(report_table.rows)
             start_idx = 0
@@ -357,32 +224,43 @@ def main(experimental=False, timeout_sec=10):
                 temp_table = report_table[start_idx:i]
                 if (i == table_size
                         or len(temp_table.get_string()) > 2800):
-                    print(temp_table)
                     start_idx = i
-                    if not experimental:
-                        send_slack_msg(temp_table)
+                    send_slack_msg_str(
+                        f"```{temp_table.get_string()}```")
 
-            # Generate the attention table (list of devices needing  attention)
-            attn_tab = attn_table(report_table, "ATTN")
-            attn_tab.sortby = "RPI-ID"
-            print(f"Attention table:\n{attn_tab}")
+        # Generate the attention table (list of devices needing  attention)
+        attn_table = create_report_table(
+            [row for row in reports if row["Attention"] == "YES"])
+        attn_table.sortby = "RPI-ID"
+        if (len(attn_table.rows) > 0):
+            print(f"Attention table:\n{attn_table}")
             if not experimental:
-                attn_msg = (f"<@U048TQS3XUK> <@U05QKN65PEY>: The "
-                            f"following RPIs need attention.\n```"
-                            f"{attn_tab.get_string()}```")
-                send_slack_msg_str(attn_msg)
+                print("SENDING ATTN TABLE TO SLACK CHANNEL ...")
+                send_slack_msg_str(
+                    "<@U048TQS3XUK> <@U05QKN65PEY>: The following RPIs need "
+                    "attention.")
+                # Split data due to Slack 3000-characters limit
+                table_size = len(attn_table.rows)
+                start_idx = 0
+                for i in range(1, table_size + 1):
+                    temp_table = attn_table[start_idx:i]
+                    if (i == table_size
+                            or len(temp_table.get_string()) > 2800):
+                        start_idx = i
+                        send_slack_msg_str(
+                            f"```{temp_table.get_string()}```")
+
         else:
-            report_table.sortby = "RPI-ID"
-            print(report_table)
+            print("ALL GOOD! No node needs attention right now.")
             if not experimental:
-                print("SEE SLACK CHANNEL")
-                send_slack_msgtxt(report_table)
-
-        client.disconnect()
-        client.loop_stop()
+                send_slack_msg_str(
+                    "ALL GOOD! No node needs attention right now.")
 
     except KeyboardInterrupt:
-        print("\nDisconnecting from the broker ...")
+        print("Keyboard Interrupt !")
+
+    finally:
+        print("Disconnecting from the broker ...")
         client.disconnect()
         client.loop_stop()
 

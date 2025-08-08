@@ -246,7 +246,7 @@ def main(experimental=False, timeout_sec=10, include_ignored=False):
                     "ALL GOOD! No node needs attention right now.")
 
     except KeyboardInterrupt:
-        print("Keyboard Interrupt !")
+        print("\nKeyboard Interrupt !")
 
     finally:
         print("Disconnecting from the broker ...")

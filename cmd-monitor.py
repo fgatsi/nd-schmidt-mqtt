@@ -19,8 +19,8 @@ logging.basicConfig(level=args.log_level.upper())
 command_string = "/pi"
 client_id = "cmd-monitor"
 if args.experimental:
-    print("Running in experimental mode! Message reply will not be sent to "
-          "the Slack channel.")
+    print("\nRunning in experimental mode! Message reply will not be sent to "
+          "the Slack channel.\n")
     command_string += "exp"
     client_id += "-exp"
 

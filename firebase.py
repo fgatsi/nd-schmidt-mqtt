@@ -9,21 +9,21 @@ firebase_admin.initialize_app(cred, {
 })
 
 
-def get_rpi_id_list():
+def get_rpi_ids():
     """
     Retrieve a dict with MAC: RPI-ID pairs.
 
     Returns:
         A dict containing pairs of MAC key and RPI-ID value.
     """
-    query = db.reference("config")
+    query = db.reference("config").get()
     values = list(query.values())
     db_keys = list(query.keys())
-    rpi_ids = list()
+    rpi_ids = dict()
     if (len(values) > 0 and len(db_keys) > 0):
-        rpi_ids = [{val["mac"]: val["rpi_id"].replace(":", "-")}
+        rpi_ids = {val["mac"].replace(":", "-"): val["rpi_id"]
                    for val in values
-                   if "rpi_id" in val and val["rpi_id"]]
+                   if "rpi_id" in val and val["rpi_id"]}
     return rpi_ids
 
 

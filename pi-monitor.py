@@ -13,6 +13,7 @@ topic = "Schmidt/+/report/status"
 
 reports = list()
 seen = set()
+rpi_ids = dict()
 TABLE_FIELD_NAMES = ["RPI-ID", "MAC", "ETH", "WIFI", "LAST REPORT", "ATTN"]
 
 
@@ -105,10 +106,10 @@ def on_connect(client, userdata, flags, rc):
 
 # The Callback function to execute whenever messages are received
 def on_message(client, userdata, msg):
-    global reports, seen
+    global reports, seen, rpi_ids
     try:
         pi_mac = msg.topic.split("/")[1]
-        rpi_id = firebase.get_rpi_id_from_mac(pi_mac)
+        rpi_id = rpi_ids[pi_mac] if pi_mac in rpi_ids else None
         if (rpi_id is not None and rpi_id.startswith("RPI-")):
             report = dict()
             # get the published msg, extract the timestamp and calculate age
@@ -176,7 +177,9 @@ def on_message(client, userdata, msg):
 
 
 def main(experimental=False, timeout_sec=10, include_ignored=False):
-    global reports
+    global reports, rpi_ids
+    rpi_ids = firebase.get_rpi_ids()
+
     # Define client and Callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
     client.on_connect = on_connect

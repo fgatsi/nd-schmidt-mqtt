@@ -16,24 +16,6 @@ seen = set()
 TABLE_FIELD_NAMES = ["RPI-ID", "MAC", "ETH", "WIFI", "LAST REPORT", "ATTN"]
 
 
-# Calculate the time difference given ISO format times with timezones as a
-# string
-def calculate_iso_difference(time_str1, time_str2):
-    # Convert strings to datetime objects, ensuring they are timezone aware
-    time1 = datetime.fromisoformat(time_str1)
-    time2 = datetime.fromisoformat(time_str2)
-
-    # Convert both times to the same timezone (UTC) for comparison
-    time1_utc = time1.astimezone(ZoneInfo('UTC'))
-    time2_utc = time2.astimezone(ZoneInfo('UTC'))
-
-    # Calculate the difference
-    time_diff = time1_utc - time2_utc
-    time_diff = time_diff.total_seconds()
-    # Return total seconds
-    return time_diff
-
-
 def format_minutes_to_human_readable(total_minutes: int) -> str:
     """
     Converts a given number of minutes into a human-readable string
